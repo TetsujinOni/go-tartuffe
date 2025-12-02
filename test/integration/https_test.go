@@ -1,13 +1,59 @@
 package integration
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"io"
+	"math/big"
+	"net"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
+
+// generateTestCert generates a self-signed certificate for testing
+func generateTestCert(commonName string) (certPEM, keyPEM string, err error) {
+	// Generate RSA key
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Create certificate template
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject: pkix.Name{
+			CommonName:   commonName,
+			Organization: []string{"Test Organization"},
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{commonName, "localhost"},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+	}
+
+	// Create certificate
+	certBytes, err := x509.CreateCertificate(rand.Reader, &template, &template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	// Encode certificate to PEM
+	certPEMBlock := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certBytes})
+
+	// Encode private key to PEM
+	keyPEMBlock := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)})
+
+	return string(certPEMBlock), string(keyPEMBlock), nil
+}
 
 // TestHTTPS_CreateImposter_WithSelfSignedCert tests creating an HTTPS imposter without providing certs
 func TestHTTPS_CreateImposter_WithSelfSignedCert(t *testing.T) {
@@ -411,5 +457,108 @@ func TestHTTPS_MutualAuth(t *testing.T) {
 
 	if string(respBody) != "mutual auth" {
 		t.Errorf("expected 'mutual auth', got '%s'", string(respBody))
+	}
+}
+
+// TestHTTPS_CustomCertificate tests that a client-provided certificate is used
+func TestHTTPS_CustomCertificate(t *testing.T) {
+	defer cleanup(t)
+
+	// Generate a certificate at runtime with a custom CN
+	customCN := "custom-test-server.local"
+	certPEM, keyPEM, err := generateTestCert(customCN)
+	if err != nil {
+		t.Fatalf("failed to generate test certificate: %v", err)
+	}
+
+	// Create HTTPS imposter with custom certificate
+	resp, body, err := post("/imposters", map[string]interface{}{
+		"protocol": "https",
+		"port":     6008,
+		"cert":     certPEM,
+		"key":      keyPEM,
+		"stubs": []map[string]interface{}{
+			{
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "custom cert response"}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	// Verify the commonName matches our custom certificate
+	if body["commonName"] != customCN {
+		t.Errorf("expected commonName '%s', got '%v'", customCN, body["commonName"])
+	}
+
+	// Verify private key is NOT returned
+	if body["key"] != nil && body["key"] != "" {
+		t.Error("private key should NOT be returned in API response")
+	}
+
+	// Verify certificate fingerprint is present
+	if body["certificateFingerprint"] == nil || body["certificateFingerprint"] == "" {
+		t.Error("expected certificateFingerprint in response")
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Make HTTPS request and verify the server uses our certificate
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+	}
+
+	impResp, err := client.Get("https://localhost:6008/test")
+	if err != nil {
+		t.Fatalf("HTTPS request failed: %v", err)
+	}
+	defer impResp.Body.Close()
+
+	// Verify the server certificate has our custom CN
+	if impResp.TLS != nil && len(impResp.TLS.PeerCertificates) > 0 {
+		serverCert := impResp.TLS.PeerCertificates[0]
+		if serverCert.Subject.CommonName != customCN {
+			t.Errorf("server certificate CN expected '%s', got '%s'", customCN, serverCert.Subject.CommonName)
+		}
+	} else {
+		t.Error("expected TLS peer certificate information")
+	}
+
+	respBody, _ := io.ReadAll(impResp.Body)
+	if string(respBody) != "custom cert response" {
+		t.Errorf("expected 'custom cert response', got '%s'", string(respBody))
+	}
+}
+
+// TestHTTPS_InvalidCertificate tests that invalid certificate returns an error
+func TestHTTPS_InvalidCertificate(t *testing.T) {
+	defer cleanup(t)
+
+	// Try to create HTTPS imposter with invalid certificate
+	resp, body, _ := post("/imposters", map[string]interface{}{
+		"protocol": "https",
+		"port":     6009,
+		"cert":     "not a valid certificate",
+		"key":      "not a valid key",
+	})
+
+	// Should return 400 Bad Request with an error
+	if resp.StatusCode != 400 {
+		t.Errorf("expected status 400 for invalid cert, got %d", resp.StatusCode)
+	}
+
+	// Check for error message
+	if body["errors"] == nil {
+		t.Error("expected errors in response for invalid certificate")
 	}
 }
