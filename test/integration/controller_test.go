@@ -111,7 +111,10 @@ func TestPOSTImpostersInvalidJSON(t *testing.T) {
 	req, _ := http.NewRequest("POST", baseURL+"/imposters", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 400 {

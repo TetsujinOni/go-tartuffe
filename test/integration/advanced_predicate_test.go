@@ -49,7 +49,10 @@ func TestDeepEqualsEmptyObjectPredicate(t *testing.T) {
 	}
 
 	// Request with query params should NOT match
-	resp2, _ := http.Get("http://localhost:4700/?foo=bar")
+	resp2, err := http.Get("http://localhost:4700/?foo=bar")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	body2, _ := io.ReadAll(resp2.Body)
@@ -85,7 +88,10 @@ func TestDeepEqualsWithPredicateKeywordInObject(t *testing.T) {
 	post("/imposters", imposter)
 
 	// Request with equals=1 should match
-	resp, _ := http.Get("http://localhost:4701/?equals=1")
+	resp, err := http.Get("http://localhost:4701/?equals=1")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -94,7 +100,10 @@ func TestDeepEqualsWithPredicateKeywordInObject(t *testing.T) {
 	}
 
 	// Request with equals=something should NOT match
-	resp2, _ := http.Get("http://localhost:4701/?equals=something")
+	resp2, err := http.Get("http://localhost:4701/?equals=something")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	body2, _ := io.ReadAll(resp2.Body)
@@ -131,7 +140,10 @@ func TestDeepEqualsMultipleKeys(t *testing.T) {
 	post("/imposters", imposter)
 
 	// Request with both params should match (order shouldn't matter)
-	resp, _ := http.Get("http://localhost:4702/?contains=false&equals=true")
+	resp, err := http.Get("http://localhost:4702/?contains=false&equals=true")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -140,7 +152,10 @@ func TestDeepEqualsMultipleKeys(t *testing.T) {
 	}
 
 	// Request with extra param should NOT match deepEquals
-	resp2, _ := http.Get("http://localhost:4702/?contains=false&equals=true&extra=yes")
+	resp2, err := http.Get("http://localhost:4702/?contains=false&equals=true&extra=yes")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	body2, _ := io.ReadAll(resp2.Body)
@@ -177,7 +192,10 @@ func TestDeepEqualsBodyNullValue(t *testing.T) {
 
 	// Request with null field should match
 	reqBody := `{"field": null}`
-	resp, _ := http.Post("http://localhost:4703/", "application/json", bytes.NewReader([]byte(reqBody)))
+	resp, err := http.Post("http://localhost:4703/", "application/json", bytes.NewReader([]byte(reqBody)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -214,7 +232,10 @@ func TestEqualsWithNullValue(t *testing.T) {
 
 	// Request with null version should match
 	reqBody := `{"version": null}`
-	resp, _ := http.Post("http://localhost:4704/", "application/json", bytes.NewReader([]byte(reqBody)))
+	resp, err := http.Post("http://localhost:4704/", "application/json", bytes.NewReader([]byte(reqBody)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -259,7 +280,10 @@ func TestJSONBodyMatching(t *testing.T) {
 
 	// Request should match
 	reqBody := `{"key": "value", "arr": [3,2,1]}`
-	resp, _ := http.Post("http://localhost:4705/", "application/json", bytes.NewReader([]byte(reqBody)))
+	resp, err := http.Post("http://localhost:4705/", "application/json", bytes.NewReader([]byte(reqBody)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -293,7 +317,10 @@ func TestMatchesOnUppercaseJSONKey(t *testing.T) {
 	post("/imposters", imposter)
 
 	reqBody := `{"Key": "Value"}`
-	resp, _ := http.Post("http://localhost:4706/", "application/json", bytes.NewReader([]byte(reqBody)))
+	resp, err := http.Post("http://localhost:4706/", "application/json", bytes.NewReader([]byte(reqBody)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -376,7 +403,10 @@ func TestJSONNullValuesInResponse(t *testing.T) {
 	}
 	post("/imposters", imposter)
 
-	resp, _ := http.Get("http://localhost:4708/")
+	resp, err := http.Get("http://localhost:4708/")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -423,7 +453,10 @@ func TestJSONBodyWithLinksField(t *testing.T) {
 	}
 	post("/imposters", imposter)
 
-	resp, _ := http.Get("http://localhost:4709/")
+	resp, err := http.Get("http://localhost:4709/")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -461,7 +494,10 @@ func TestKeepaliveConnectionHeader(t *testing.T) {
 	}
 	post("/imposters", imposter)
 
-	resp, _ := http.Get("http://localhost:4710/")
+	resp, err := http.Get("http://localhost:4710/")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -508,7 +544,10 @@ func TestDefaultResponseOverride(t *testing.T) {
 	post("/imposters", imposter)
 
 	// First request - should use stub body with default status
-	resp1, _ := http.Get("http://localhost:4711/")
+	resp1, err := http.Get("http://localhost:4711/")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp1.Body.Close()
 
 	if resp1.StatusCode != 404 {
@@ -521,7 +560,10 @@ func TestDefaultResponseOverride(t *testing.T) {
 	}
 
 	// Second request - should use stub status with default body
-	resp2, _ := http.Get("http://localhost:4711/")
+	resp2, err := http.Get("http://localhost:4711/")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != 500 {
@@ -534,7 +576,10 @@ func TestDefaultResponseOverride(t *testing.T) {
 	}
 
 	// Third request - no matching stub, should use full defaultResponse
-	resp3, _ := http.Get("http://localhost:4711/differentStub")
+	resp3, err := http.Get("http://localhost:4711/differentStub")
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp3.Body.Close()
 
 	if resp3.StatusCode != 404 {
@@ -576,7 +621,10 @@ func TestDeepEqualsBodyArray(t *testing.T) {
 
 	// Array order matters for deepEquals
 	reqBody := `{"key": "value", "arr": [2, 1, 3]}`
-	resp, _ := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody)))
+	resp, err := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
@@ -586,7 +634,10 @@ func TestDeepEqualsBodyArray(t *testing.T) {
 
 	// Different order should NOT match
 	reqBody2 := `{"key": "value", "arr": [1, 2, 3]}`
-	resp2, _ := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody2)))
+	resp2, err := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody2)))
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	body2, _ := io.ReadAll(resp2.Body)
@@ -676,7 +727,10 @@ func TestComplexPredicateCombination(t *testing.T) {
 	req, _ := http.NewRequest("POST", "http://localhost:4714/test?key=value", bytes.NewReader([]byte("TEST")))
 	req.Header.Set("X-One", "anything")
 	req.Header.Set("Content-Type", "text/plain")
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 400 {
@@ -686,7 +740,10 @@ func TestComplexPredicateCombination(t *testing.T) {
 	// Wrong path should not match
 	req2, _ := http.NewRequest("POST", "http://localhost:4714/?key=value", bytes.NewReader([]byte("TEST")))
 	req2.Header.Set("X-One", "anything")
-	resp2, _ := client.Do(req2)
+	resp2, err := client.Do(req2)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != 200 {
@@ -695,7 +752,10 @@ func TestComplexPredicateCombination(t *testing.T) {
 
 	// Missing header should not match
 	req3, _ := http.NewRequest("POST", "http://localhost:4714/test?key=value", bytes.NewReader([]byte("TEST")))
-	resp3, _ := client.Do(req3)
+	resp3, err := client.Do(req3)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp3.Body.Close()
 
 	if resp3.StatusCode != 200 {
@@ -706,7 +766,10 @@ func TestComplexPredicateCombination(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 	req4, _ := http.NewRequest("POST", "http://localhost:4714/test?key=value", bytes.NewReader([]byte("TESTing")))
 	req4.Header.Set("X-One", "anything")
-	resp4, _ := client.Do(req4)
+	resp4, err := client.Do(req4)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp4.Body.Close()
 
 	if resp4.StatusCode != 200 {

@@ -26,7 +26,10 @@ func TestCORSDisabledByDefault(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Headers", "X-Custom-Header")
 	req.Header.Set("Origin", "localhost:8080")
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -67,7 +70,10 @@ func TestCORSEnabledWithAllowCORS(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Headers", "X-Custom-Header")
 	req.Header.Set("Origin", "localhost:8080")
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -106,7 +112,10 @@ func TestCORSNotHandledWithoutPreflightHeaders(t *testing.T) {
 	req, _ := http.NewRequest("OPTIONS", "http://localhost:4802/", nil)
 	// Missing Access-Control-Request-Method, Access-Control-Request-Headers, Origin
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -146,7 +155,10 @@ func TestCORSWithMultipleHeaders(t *testing.T) {
 	req.Header.Set("Access-Control-Request-Headers", "X-Header-One, X-Header-Two, Content-Type")
 	req.Header.Set("Origin", "https://example.com")
 
-	resp, _ := client.Do(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
@@ -206,7 +218,10 @@ func TestCORSWithStubMatch(t *testing.T) {
 	putReq, _ := http.NewRequest("PUT", "http://localhost:4804/", nil)
 	putReq.Header.Set("Origin", "http://example.com")
 
-	putResp, _ := client.Do(putReq)
+	putResp, err := client.Do(putReq)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
 	defer putResp.Body.Close()
 
 	if putResp.StatusCode != 200 {
