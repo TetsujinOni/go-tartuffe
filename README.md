@@ -1,6 +1,6 @@
 # go-tartuffe
 
-A high-performance Go implementation of [mountebank](https://www.mbtest.org), the open source tool for creating test doubles over the wire.
+A high-performance Go implementation of [mountebank](https://www.mbtest.dev), the open source tool for creating test doubles over the wire.
 
 This project is an AI-assisted port exploring full-repo replatforming while addressing scaling challenges inherent in Node.js-hosted tooling.
 
@@ -133,7 +133,7 @@ make fmt
 ## Documentation
 
 - [Plugin Development](docs/plugins.md) - Creating custom protocol and repository plugins
-- [Mountebank Documentation](https://www.mbtest.org/docs/gettingStarted) - API reference and concepts
+- [Mountebank Documentation](https://www.mbtest.dev/docs/gettingStarted) - API reference and concepts
 
 ## Compatibility
 
@@ -151,4 +151,4 @@ The quality of this imposter of a mountebank is due for exploration and deeper c
 
 ## Acknowledgments
 
-This project is a port of [mountebank](https://www.mbtest.org) by Brandon Byars. See the original project for comprehensive documentation on service virtualization concepts.
+This project is a port of [mountebank](https://www.mbtest.dev) by Brandon Byars. See the original project for comprehensive documentation on service virtualization concepts.

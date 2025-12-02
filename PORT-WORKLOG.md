@@ -4,7 +4,7 @@ A timeline and summary of the AI-assisted port of mountebank from Node.js to Go.
 
 ## Project Overview
 
-- **Source Project**: [mountebank](https://www.mbtest.org) (Node.js)
+- **Source Project**: [mountebank](https://www.mbtest.dev) (Node.js)
 - **Target**: go-tartuffe (Go 1.25)
 - **AI Tool**: Claude Code with Claude Opus 4.5
 - **Duration**: November 27 - December 2, 2025 (6 days)
