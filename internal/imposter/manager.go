@@ -31,10 +31,10 @@ type ImposterServer interface {
 
 // Manager manages the lifecycle of imposter servers (HTTP, TCP, SMTP, gRPC)
 type Manager struct {
-	servers     map[int]*Server      // HTTP servers
-	tcpServers  map[int]*TCPServer   // TCP servers
-	smtpServers map[int]*SMTPServer  // SMTP servers
-	grpcServers map[int]*GRPCServer  // gRPC servers
+	servers     map[int]*Server     // HTTP servers
+	tcpServers  map[int]*TCPServer  // TCP servers
+	smtpServers map[int]*SMTPServer // SMTP servers
+	grpcServers map[int]*GRPCServer // gRPC servers
 	mu          sync.RWMutex
 }
 

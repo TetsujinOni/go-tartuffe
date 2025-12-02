@@ -134,12 +134,12 @@ type IsResponse struct {
 
 // ProxyResponse defines proxy behavior
 type ProxyResponse struct {
-	To                     string            `json:"to"`
-	Mode                   string            `json:"mode,omitempty"`
-	PredicateGenerators    []PredicateGen    `json:"predicateGenerators,omitempty"`
-	AddWaitBehavior        bool              `json:"addWaitBehavior,omitempty"`
-	AddDecorateBehavior    string            `json:"addDecorateBehavior,omitempty"`
-	InjectHeaders          map[string]string `json:"injectHeaders,omitempty"`
+	To                  string            `json:"to"`
+	Mode                string            `json:"mode,omitempty"`
+	PredicateGenerators []PredicateGen    `json:"predicateGenerators,omitempty"`
+	AddWaitBehavior     bool              `json:"addWaitBehavior,omitempty"`
+	AddDecorateBehavior string            `json:"addDecorateBehavior,omitempty"`
+	InjectHeaders       map[string]string `json:"injectHeaders,omitempty"`
 
 	// mTLS options for proxy requests
 	Cert           string `json:"cert,omitempty"`           // Client certificate PEM
@@ -175,10 +175,10 @@ type Copy struct {
 
 // Lookup behavior looks up values from external data
 type Lookup struct {
-	Key         interface{} `json:"key"`
+	Key            interface{} `json:"key"`
 	FromDataSource *DataSource `json:"fromDataSource"`
-	Into        string      `json:"into"`
-	Using       *Using      `json:"using,omitempty"`
+	Into           string      `json:"into"`
+	Using          *Using      `json:"using,omitempty"`
 }
 
 // DataSource for lookup behavior
@@ -188,9 +188,9 @@ type DataSource struct {
 
 // CSVSource defines CSV file data source
 type CSVSource struct {
-	Path           string `json:"path"`
-	KeyColumn      string `json:"keyColumn"`
-	Delimiter      string `json:"delimiter,omitempty"`
+	Path      string `json:"path"`
+	KeyColumn string `json:"keyColumn"`
+	Delimiter string `json:"delimiter,omitempty"`
 }
 
 // Using defines value extraction method
@@ -203,8 +203,8 @@ type Using struct {
 
 // UsingOptions for extraction methods
 type UsingOptions struct {
-	IgnoreCase   bool   `json:"ignoreCase,omitempty"`
-	Multiline    bool   `json:"multiline,omitempty"`
+	IgnoreCase bool `json:"ignoreCase,omitempty"`
+	Multiline  bool `json:"multiline,omitempty"`
 }
 
 // NextResponse returns the next response in the cycle

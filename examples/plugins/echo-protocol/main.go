@@ -47,13 +47,13 @@ import (
 
 // Config is passed as the last command-line argument
 type Config struct {
-	Port           int             `json:"port"`
-	Protocol       string          `json:"protocol"`
-	Name           string          `json:"name"`
-	RecordRequests bool            `json:"recordRequests"`
-	Stubs          []Stub          `json:"stubs"`
+	Port            int             `json:"port"`
+	Protocol        string          `json:"protocol"`
+	Name            string          `json:"name"`
+	RecordRequests  bool            `json:"recordRequests"`
+	Stubs           []Stub          `json:"stubs"`
 	DefaultResponse json.RawMessage `json:"defaultResponse,omitempty"`
-	CallbackURL    string          `json:"callbackURL"`
+	CallbackURL     string          `json:"callbackURL"`
 }
 
 type Stub struct {

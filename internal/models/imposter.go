@@ -27,17 +27,17 @@ type Imposter struct {
 	EndOfRequestResolver *EndOfRequestResolver `json:"endOfRequestResolver,omitempty"` // For TCP: custom request boundary detection
 	Stubs                []Stub                `json:"stubs,omitempty"`
 	DefaultResponse      *Response             `json:"defaultResponse,omitempty"`
-	Requests        []Request      `json:"requests,omitempty"`
-	TCPRequests     []TCPRequest   `json:"tcpRequests,omitempty"`  // For TCP protocol
-	SMTPRequests    []SMTPRequest  `json:"smtpRequests,omitempty"` // For SMTP protocol
-	GRPCRequests    []GRPCRequest  `json:"grpcRequests,omitempty"` // For gRPC protocol
-	Links           *Links         `json:"_links,omitempty"`
+	Requests             []Request             `json:"requests,omitempty"`
+	TCPRequests          []TCPRequest          `json:"tcpRequests,omitempty"`  // For TCP protocol
+	SMTPRequests         []SMTPRequest         `json:"smtpRequests,omitempty"` // For SMTP protocol
+	GRPCRequests         []GRPCRequest         `json:"grpcRequests,omitempty"` // For gRPC protocol
+	Links                *Links                `json:"_links,omitempty"`
 
 	// gRPC configuration
-	ProtoFiles       []string         `json:"protoFiles,omitempty"`       // .proto files to load
-	ProtoDirectory   string           `json:"protoDirectory,omitempty"`   // Base directory for proto files
-	Services         []ServiceConfig  `json:"services,omitempty"`         // Services to expose (nil = all)
-	EnableReflection bool             `json:"enableReflection,omitempty"` // Enable gRPC reflection API
+	ProtoFiles       []string        `json:"protoFiles,omitempty"`       // .proto files to load
+	ProtoDirectory   string          `json:"protoDirectory,omitempty"`   // Base directory for proto files
+	Services         []ServiceConfig `json:"services,omitempty"`         // Services to expose (nil = all)
+	EnableReflection bool            `json:"enableReflection,omitempty"` // Enable gRPC reflection API
 
 	// HTTPS/TLS configuration (input fields)
 	Key                string   `json:"key,omitempty"`                // Private key PEM (not returned in API responses)
@@ -67,10 +67,10 @@ type TCPRequest struct {
 // GRPCRequest represents a recorded gRPC request
 type GRPCRequest struct {
 	RequestFrom string                 `json:"requestFrom,omitempty"`
-	Service     string                 `json:"service"`              // Full service name (package.Service)
-	Method      string                 `json:"method"`               // RPC method name
-	Message     map[string]interface{} `json:"message"`              // Deserialized request as JSON
-	Metadata    map[string][]string    `json:"metadata,omitempty"`   // gRPC metadata (like headers)
+	Service     string                 `json:"service"`            // Full service name (package.Service)
+	Method      string                 `json:"method"`             // RPC method name
+	Message     map[string]interface{} `json:"message"`            // Deserialized request as JSON
+	Metadata    map[string][]string    `json:"metadata,omitempty"` // gRPC metadata (like headers)
 	Timestamp   string                 `json:"timestamp,omitempty"`
 }
 

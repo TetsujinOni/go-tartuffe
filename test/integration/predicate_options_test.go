@@ -113,7 +113,7 @@ func TestPredicateOption_Except_CaseSensitive(t *testing.T) {
 						"equals": map[string]interface{}{
 							"body": "This is a test", // Pattern won't match because of case
 						},
-						"except":        "^t",   // Lowercase 't', won't match 'T'
+						"except":        "^t", // Lowercase 't', won't match 'T'
 						"caseSensitive": true,
 					},
 				},

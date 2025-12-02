@@ -15,11 +15,11 @@ import (
 
 // ProtoLoader handles loading and parsing .proto files at runtime
 type ProtoLoader struct {
-	mu          sync.RWMutex
-	files       linker.Files
-	services    map[string]protoreflect.ServiceDescriptor
-	messages    map[string]protoreflect.MessageDescriptor
-	baseDir     string
+	mu       sync.RWMutex
+	files    linker.Files
+	services map[string]protoreflect.ServiceDescriptor
+	messages map[string]protoreflect.MessageDescriptor
+	baseDir  string
 }
 
 // NewProtoLoader creates a new proto loader
@@ -224,9 +224,9 @@ type ServiceInfo struct {
 
 // MethodInfo contains information about a method
 type MethodInfo struct {
-	Name           string
-	InputType      string
-	OutputType     string
+	Name            string
+	InputType       string
+	OutputType      string
 	ClientStreaming bool
 	ServerStreaming bool
 }
@@ -246,9 +246,9 @@ func (l *ProtoLoader) ListServices() []ServiceInfo {
 		for i := 0; i < methods.Len(); i++ {
 			m := methods.Get(i)
 			info.Methods = append(info.Methods, MethodInfo{
-				Name:           string(m.Name()),
-				InputType:      string(m.Input().FullName()),
-				OutputType:     string(m.Output().FullName()),
+				Name:            string(m.Name()),
+				InputType:       string(m.Input().FullName()),
+				OutputType:      string(m.Output().FullName()),
 				ClientStreaming: m.IsStreamingClient(),
 				ServerStreaming: m.IsStreamingServer(),
 			})

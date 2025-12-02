@@ -987,7 +987,6 @@ func (m *Matcher) jsonMatchesPattern(actual interface{}, patternMap map[string]i
 	return true
 }
 
-
 // toString converts a value to string
 func toString(v interface{}) (string, bool) {
 	switch val := v.(type) {

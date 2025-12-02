@@ -539,4 +539,3 @@ func TestProxy_InjectHeaders(t *testing.T) {
 		t.Errorf("expected custom='custom-value', got %v", result["custom"])
 	}
 }
-
