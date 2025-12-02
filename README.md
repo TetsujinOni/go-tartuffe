@@ -143,6 +143,12 @@ This project aims for API compatibility with mountebank 2.9.3. Some advanced fea
 
 MIT License - see [LICENSE](LICENSE) for details.
 
+## Background
+
+As an agentic AI port of the Mountebank project to both explore the state of the art in full-repo replatforming of an open source toolchain, and an opportunity to address certain scaling challenges inherent in Node.js hosted tooling without scaling to multiple containers, an AI skeptical engineer tried to make a hypocrite of himself.
+
+The quality of this imposter of a mountebank is due for exploration and deeper code review. Assume it's all questionable in its provenance and potentially inaccurate in its imitation of the legerdemain of its antecedent.
+
 ## Acknowledgments
 
 This project is a port of [mountebank](https://www.mbtest.org) by Brandon Byars. See the original project for comprehensive documentation on service virtualization concepts.
