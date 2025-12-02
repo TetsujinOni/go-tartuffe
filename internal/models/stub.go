@@ -2,7 +2,7 @@ package models
 
 import (
 	"encoding/json"
-	"sync"
+	"sync/atomic"
 )
 
 // Stub defines matching rules and responses
@@ -11,10 +11,10 @@ type Stub struct {
 	Responses  []Response  `json:"responses"`
 	Links      *StubLinks  `json:"_links,omitempty"`
 
-	// Internal state for response cycling
-	mu            sync.Mutex `json:"-"`
-	responseIndex int        `json:"-"`
-	repeatCount   int        `json:"-"`
+	// Internal state for response cycling (use atomic for thread safety)
+	// These are plain int64 so Stub can be copied; use atomic functions to access
+	responseIndex int64 `json:"-"`
+	repeatCount   int64 `json:"-"`
 }
 
 // StubLinks contains hypermedia links for a stub
@@ -213,21 +213,20 @@ func (s *Stub) NextResponse() *Response {
 		return nil
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	resp := &s.Responses[s.responseIndex]
+	numResponses := int64(len(s.Responses))
+	idx := atomic.LoadInt64(&s.responseIndex) % numResponses
+	resp := &s.Responses[idx]
 
 	// Handle repeat
-	repeat := resp.Repeat
+	repeat := int64(resp.Repeat)
 	if repeat == 0 {
 		repeat = 1
 	}
 
-	s.repeatCount++
-	if s.repeatCount >= repeat {
-		s.repeatCount = 0
-		s.responseIndex = (s.responseIndex + 1) % len(s.Responses)
+	newRepeatCount := atomic.AddInt64(&s.repeatCount, 1)
+	if newRepeatCount >= repeat {
+		atomic.StoreInt64(&s.repeatCount, 0)
+		atomic.AddInt64(&s.responseIndex, 1)
 	}
 
 	return resp
