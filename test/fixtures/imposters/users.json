@@ -1,0 +1,25 @@
+{
+  "port": 4547,
+  "protocol": "http",
+  "name": "user service",
+  "stubs": [
+    {
+      "responses": [
+        {
+          "is": {
+            "statusCode": 200,
+            "body": "{\"users\": [{\"id\": 1, \"name\": \"Alice\"}, {\"id\": 2, \"name\": \"Bob\"}]}"
+          }
+        }
+      ],
+      "predicates": [
+        {
+          "equals": {
+            "path": "/users",
+            "method": "GET"
+          }
+        }
+      ]
+    }
+  ]
+}

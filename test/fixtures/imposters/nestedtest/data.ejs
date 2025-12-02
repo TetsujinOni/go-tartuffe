@@ -1,0 +1,19 @@
+{
+  "protocol": "http",
+  "port": 4570,
+  "name": "nested stringify test",
+  "stubs": [
+    {
+      "responses": [
+        {
+          "is": {
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "body": "<%- stringify(filename, 'response.ejs') %>"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "imposters": [
+    {
+      "port": 4548,
+      "protocol": "http",
+      "name": "stringify test",
+      "stubs": [
+        {
+          "responses": [
+            {
+              "is": {
+                "statusCode": 200,
+                "body": "<%- stringify(filename, 'response-body.txt') %>"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

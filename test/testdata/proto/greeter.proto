@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package helloworld;
+
+option go_package = "github.com/TetsujinOni/go-tartuffe/test/testdata/proto;proto";
+
+// The greeting service definition.
+service Greeter {
+  // Sends a greeting (unary)
+  rpc SayHello (HelloRequest) returns (HelloReply) {}
+  // Sends another greeting (unary)
+  rpc SayGoodbye (HelloRequest) returns (HelloReply) {}
+  // Server streaming - returns multiple greetings
+  rpc SayHelloStream (HelloRequest) returns (stream HelloReply) {}
+  // Client streaming - receives multiple names, returns one greeting
+  rpc SayHelloToMany (stream HelloRequest) returns (HelloReply) {}
+  // Bidirectional streaming - chat style
+  rpc Chat (stream HelloRequest) returns (stream HelloReply) {}
+}
+
+// The request message containing the user's name.
+message HelloRequest {
+  string name = 1;
+  int32 age = 2;
+}
+
+// The response message containing the greeting.
+message HelloReply {
+  string message = 1;
+  int64 timestamp = 2;
+}

@@ -1,0 +1,21 @@
+{
+  "imposters": [
+    {
+      "port": 4545,
+      "protocol": "http",
+      "name": "simple service",
+      "stubs": [
+        {
+          "responses": [
+            {
+              "is": {
+                "statusCode": 200,
+                "body": "Hello from simple service"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
