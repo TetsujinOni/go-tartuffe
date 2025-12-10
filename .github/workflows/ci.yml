@@ -79,6 +79,8 @@ jobs:
   docker:
     name: Docker Build
     runs-on: ubuntu-latest
+    permissions: 
+      packages: write
     needs: [test, lint]
     steps:
       - name: Checkout code
