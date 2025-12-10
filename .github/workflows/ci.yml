@@ -81,6 +81,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions: 
       packages: write
+      id-token: write
     needs: [test, lint]
     steps:
       - name: Checkout code
