@@ -81,9 +81,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions: 
       contents: read
-      attestations: write
-      packages: write
-      id-token: write
     needs: [test, lint]
     steps:
       - name: Checkout code
@@ -109,13 +106,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          push: false
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels  }}
-        
-      - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v3
-        with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
-          subject-digest: ${{ steps.push.outputs.digest }}
-          push-to-registry: true
+
