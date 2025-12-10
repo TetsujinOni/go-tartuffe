@@ -103,6 +103,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}         
 
       - name: Build Docker image
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
