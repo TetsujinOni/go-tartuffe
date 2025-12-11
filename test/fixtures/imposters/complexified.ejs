@@ -1,0 +1,18 @@
+    {
+      "port": 45452,
+      "protocol": "http",
+      "name": "commented service",
+    <%# comments should be stripped during parsing %>
+      "stubs": [
+        {
+          "responses": [
+            {
+              "is": {
+                "statusCode": 200,
+                "body": "Hello from simple service"
+              }
+            }
+          ]
+        }
+      ]
+    }

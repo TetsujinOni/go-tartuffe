@@ -3,8 +3,10 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
@@ -56,6 +58,7 @@ func (l *Loader) Load() (*Config, error) {
 
 	// Parse JSON
 	var config Config
+	contentStr = RemoveJSComments(contentStr)
 	if err := json.Unmarshal([]byte(contentStr), &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config JSON: %w", err)
 	}
@@ -99,4 +102,14 @@ func LoadFile(filename string, noParse bool) (*Config, error) {
 		NoParse:    noParse,
 	})
 	return loader.Load()
+}
+
+// RemoveJSComments strips <%# .... %> comments from EJS content
+// while valid in EJS overall, they are not valid for our imposter parsing.
+func RemoveJSComments(content string) string {
+	log.Printf("starting regex to remove comments from EJS")
+	re := regexp.MustCompile(`<%#.*?%>`)
+	output := re.ReplaceAllString(content, "")
+	log.Printf("completed regex to remove comments from EJS")
+	return output
 }

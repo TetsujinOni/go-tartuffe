@@ -54,8 +54,8 @@ func TestConfigFile_LoadEJSWithIncludes(t *testing.T) {
 		t.Fatalf("failed to load config: %v", err)
 	}
 
-	if len(cfg.Imposters) != 2 {
-		t.Fatalf("expected 2 imposters, got %d", len(cfg.Imposters))
+	if len(cfg.Imposters) != 3 {
+		t.Fatalf("expected 3 imposters, got %d", len(cfg.Imposters))
 	}
 
 	// Check orders service
@@ -72,6 +72,13 @@ func TestConfigFile_LoadEJSWithIncludes(t *testing.T) {
 	}
 	if cfg.Imposters[1].Name != "user service" {
 		t.Errorf("expected second imposter name 'user service', got '%s'", cfg.Imposters[1].Name)
+	}
+
+	if cfg.Imposters[2].Port != 45452 {
+		t.Errorf("expected third imposter port 45452, got %d", cfg.Imposters[2].Port)
+	}
+	if cfg.Imposters[2].Name != "commented service" {
+		t.Errorf("expected third imposter name 'commented service', got '%s'", cfg.Imposters[2].Name)
 	}
 }
 
