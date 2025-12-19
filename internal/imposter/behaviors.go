@@ -118,12 +118,14 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 // executeWaitFunction executes a JavaScript function to get wait time
 func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
 	vm := goja.New()
+	jsLogger := NewJSLogger("behavior:wait")
+	vm.Set("logger", jsLogger.createLoggerObject())
 
 	// Wrap and execute the function
 	wrappedScript := fmt.Sprintf(`(%s)()`, script)
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		return 0, fmt.Errorf("invalid wait function: %w", err)
+		return 0, formatJSError(err, script, "wait behavior")
 	}
 
 	// Convert result to int
@@ -542,6 +544,7 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 // executeDecorate runs JavaScript to post-process the response
 func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsResponse, script string) (*models.IsResponse, error) {
 	vm := goja.New()
+	jsLogger := NewJSLogger("behavior:decorate")
 
 	// Ensure headers is not nil
 	respHeaders := resp.Headers
@@ -565,17 +568,14 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 		"body":       resp.Body,
 	}
 
+	loggerObj := jsLogger.createLoggerObject()
+
 	// Create config object (new interface)
 	config := map[string]interface{}{
 		"request":  requestObj,
 		"response": responseObj,
-		"logger": map[string]interface{}{
-			"debug": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-			"info":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-			"warn":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-			"error": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		},
-		"state": map[string]interface{}{},
+		"logger":   loggerObj,
+		"state":    map[string]interface{}{},
 	}
 
 	vm.Set("config", config)
@@ -583,7 +583,7 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 	// Also set individual variables for old interface compatibility
 	vm.Set("request", requestObj)
 	vm.Set("response", responseObj)
-	vm.Set("logger", config["logger"])
+	vm.Set("logger", loggerObj)
 
 	// Execute the decorator
 	// Support both old interface (request, response) and new interface (config)
@@ -605,7 +605,7 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		return nil, fmt.Errorf("decorate script error: %w", err)
+		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
 
 	// Convert result back to IsResponse
