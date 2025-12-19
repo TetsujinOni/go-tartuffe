@@ -3,6 +3,7 @@ package imposter
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"reflect"
 	"regexp"
 	"strings"
@@ -242,7 +243,7 @@ func (m *Matcher) evaluateInject(script string, req *models.Request) bool {
 	engine := NewJSEngine()
 	result, err := engine.ExecutePredicate(script, req)
 	if err != nil {
-		// Log error but return false
+		log.Printf("[ERROR] inject predicate failed: %v", err)
 		return false
 	}
 	return result

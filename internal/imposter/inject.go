@@ -3,10 +3,88 @@ package imposter
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/dop251/goja"
 )
+
+// scriptPreviewLength is the max length of script shown in error messages
+const scriptPreviewLength = 100
+
+// JSLogger provides logging functions to JavaScript code
+type JSLogger struct {
+	context string // e.g., "inject:response", "inject:predicate"
+}
+
+// NewJSLogger creates a logger with the given context
+func NewJSLogger(context string) *JSLogger {
+	return &JSLogger{context: context}
+}
+
+// createLoggerObject creates a logger object for the Goja VM
+func (l *JSLogger) createLoggerObject(vm *goja.Runtime) map[string]interface{} {
+	return map[string]interface{}{
+		"debug": func(call goja.FunctionCall) goja.Value {
+			l.log("DEBUG", call.Arguments)
+			return goja.Undefined()
+		},
+		"info": func(call goja.FunctionCall) goja.Value {
+			l.log("INFO", call.Arguments)
+			return goja.Undefined()
+		},
+		"warn": func(call goja.FunctionCall) goja.Value {
+			l.log("WARN", call.Arguments)
+			return goja.Undefined()
+		},
+		"error": func(call goja.FunctionCall) goja.Value {
+			l.log("ERROR", call.Arguments)
+			return goja.Undefined()
+		},
+	}
+}
+
+// log formats and outputs a log message
+func (l *JSLogger) log(level string, args []goja.Value) {
+	parts := make([]string, 0, len(args))
+	for _, arg := range args {
+		parts = append(parts, fmt.Sprintf("%v", arg.Export()))
+	}
+	msg := strings.Join(parts, " ")
+	log.Printf("[%s] [%s] %s", level, l.context, msg)
+}
+
+// scriptPreview returns a truncated preview of a script for error messages
+func scriptPreview(script string) string {
+	// Normalize whitespace
+	script = strings.Join(strings.Fields(script), " ")
+	if len(script) > scriptPreviewLength {
+		return script[:scriptPreviewLength] + "..."
+	}
+	return script
+}
+
+// formatJSError formats a JavaScript error with stack trace if available
+func formatJSError(err error, script string, reqInfo string) error {
+	preview := scriptPreview(script)
+
+	// Check if it's a Goja exception with stack trace
+	if exception, ok := err.(*goja.Exception); ok {
+		return fmt.Errorf("JavaScript error: %s\n  Script: %s\n  Request: %s\n  Stack: %s",
+			exception.Value().String(), preview, reqInfo, exception.String())
+	}
+
+	return fmt.Errorf("JavaScript error: %v\n  Script: %s\n  Request: %s", err, preview, reqInfo)
+}
+
+// formatRequestInfo creates a brief request description for error messages
+func formatRequestInfo(req *models.Request) string {
+	if req == nil {
+		return "<nil request>"
+	}
+	return fmt.Sprintf("%s %s", req.Method, req.Path)
+}
 
 // JSEngine handles JavaScript injection execution
 type JSEngine struct{}
@@ -19,6 +97,7 @@ func NewJSEngine() *JSEngine {
 // ExecuteResponse executes an inject script and returns the response
 func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.IsResponse, error) {
 	vm := goja.New()
+	jsLogger := NewJSLogger("inject:response")
 
 	// Set up the request object
 	reqObj := map[string]interface{}{
@@ -31,14 +110,7 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.
 	}
 
 	vm.Set("request", reqObj)
-
-	// Set up logger (mock for compatibility)
-	vm.Set("logger", map[string]interface{}{
-		"debug": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"info":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"warn":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"error": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-	})
+	vm.Set("logger", jsLogger.createLoggerObject(vm))
 
 	// Set up state object (empty but available)
 	vm.Set("state", map[string]interface{}{})
@@ -53,7 +125,7 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		return nil, fmt.Errorf("inject script error: %w", err)
+		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
 
 	// Convert result to IsResponse
@@ -63,6 +135,7 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.
 // ExecutePredicate executes an inject predicate script
 func (e *JSEngine) ExecutePredicate(script string, req *models.Request) (bool, error) {
 	vm := goja.New()
+	jsLogger := NewJSLogger("inject:predicate")
 
 	// Set up the request object
 	reqObj := map[string]interface{}{
@@ -75,14 +148,7 @@ func (e *JSEngine) ExecutePredicate(script string, req *models.Request) (bool, e
 	}
 
 	vm.Set("request", reqObj)
-
-	// Set up logger
-	vm.Set("logger", map[string]interface{}{
-		"debug": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"info":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"warn":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"error": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-	})
+	vm.Set("logger", jsLogger.createLoggerObject(vm))
 
 	// Wrap the script in a function call
 	wrappedScript := fmt.Sprintf(`
@@ -94,7 +160,7 @@ func (e *JSEngine) ExecutePredicate(script string, req *models.Request) (bool, e
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		return false, fmt.Errorf("inject predicate error: %w", err)
+		return false, formatJSError(err, script, formatRequestInfo(req))
 	}
 
 	return result.ToBoolean(), nil
@@ -179,17 +245,11 @@ func (e *JSEngine) convertToResponse(val goja.Value) (*models.IsResponse, error)
 // Returns true if the accumulated data represents a complete request
 func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string) (bool, error) {
 	vm := goja.New()
+	jsLogger := NewJSLogger("inject:endOfRequestResolver")
 
 	// Set up the request data
 	vm.Set("requestData", requestData)
-
-	// Set up logger (mock for compatibility)
-	vm.Set("logger", map[string]interface{}{
-		"debug": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"info":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"warn":  func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-		"error": func(call goja.FunctionCall) goja.Value { return goja.Undefined() },
-	})
+	vm.Set("logger", jsLogger.createLoggerObject(vm))
 
 	// Wrap the script in a function call
 	wrappedScript := fmt.Sprintf(`
@@ -201,7 +261,12 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		return false, fmt.Errorf("endOfRequestResolver error: %w", err)
+		// Include preview of request data for debugging
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return false, formatJSError(err, script, fmt.Sprintf("requestData: %q", dataPreview))
 	}
 
 	return result.ToBoolean(), nil
