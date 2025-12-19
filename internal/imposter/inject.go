@@ -8,6 +8,8 @@ import (
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/dop251/goja"
+	"github.com/dop251/goja_nodejs/buffer"
+	"github.com/dop251/goja_nodejs/require"
 )
 
 // scriptPreviewLength is the max length of script shown in error messages
@@ -24,7 +26,7 @@ func NewJSLogger(context string) *JSLogger {
 }
 
 // createLoggerObject creates a logger object for the Goja VM
-func (l *JSLogger) createLoggerObject(vm *goja.Runtime) map[string]interface{} {
+func (l *JSLogger) createLoggerObject() map[string]interface{} {
 	return map[string]interface{}{
 		"debug": func(call goja.FunctionCall) goja.Value {
 			l.log("DEBUG", call.Arguments)
@@ -87,16 +89,28 @@ func formatRequestInfo(req *models.Request) string {
 }
 
 // JSEngine handles JavaScript injection execution
-type JSEngine struct{}
+type JSEngine struct {
+	registry *require.Registry // Node.js module registry for Goja Runtimes
+}
 
 // NewJSEngine creates a new JavaScript engine
 func NewJSEngine() *JSEngine {
-	return &JSEngine{}
+	reg := require.NewRegistry()
+	return &JSEngine{
+		registry: reg,
+	}
+}
+
+func (e *JSEngine) enableRequires(vm *goja.Runtime) {
+	e.registry.Enable(vm)
 }
 
 // ExecuteResponse executes an inject script and returns the response
 func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.IsResponse, error) {
 	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+
 	jsLogger := NewJSLogger("inject:response")
 
 	// Set up the request object
@@ -110,7 +124,7 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.
 	}
 
 	vm.Set("request", reqObj)
-	vm.Set("logger", jsLogger.createLoggerObject(vm))
+	vm.Set("logger", jsLogger.createLoggerObject())
 
 	// Set up state object (empty but available)
 	vm.Set("state", map[string]interface{}{})
@@ -135,6 +149,9 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.
 // ExecutePredicate executes an inject predicate script
 func (e *JSEngine) ExecutePredicate(script string, req *models.Request) (bool, error) {
 	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+
 	jsLogger := NewJSLogger("inject:predicate")
 
 	// Set up the request object
@@ -148,7 +165,7 @@ func (e *JSEngine) ExecutePredicate(script string, req *models.Request) (bool, e
 	}
 
 	vm.Set("request", reqObj)
-	vm.Set("logger", jsLogger.createLoggerObject(vm))
+	vm.Set("logger", jsLogger.createLoggerObject())
 
 	// Wrap the script in a function call
 	wrappedScript := fmt.Sprintf(`
@@ -245,11 +262,14 @@ func (e *JSEngine) convertToResponse(val goja.Value) (*models.IsResponse, error)
 // Returns true if the accumulated data represents a complete request
 func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string) (bool, error) {
 	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+
 	jsLogger := NewJSLogger("inject:endOfRequestResolver")
 
 	// Set up the request data
 	vm.Set("requestData", requestData)
-	vm.Set("logger", jsLogger.createLoggerObject(vm))
+	vm.Set("logger", jsLogger.createLoggerObject())
 
 	// Wrap the script in a function call
 	wrappedScript := fmt.Sprintf(`

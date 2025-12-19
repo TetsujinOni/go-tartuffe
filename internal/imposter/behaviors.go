@@ -119,7 +119,7 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
 	vm := goja.New()
 	jsLogger := NewJSLogger("behavior:wait")
-	vm.Set("logger", jsLogger.createLoggerObject(vm))
+	vm.Set("logger", jsLogger.createLoggerObject())
 
 	// Wrap and execute the function
 	wrappedScript := fmt.Sprintf(`(%s)()`, script)
@@ -568,7 +568,7 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 		"body":       resp.Body,
 	}
 
-	loggerObj := jsLogger.createLoggerObject(vm)
+	loggerObj := jsLogger.createLoggerObject()
 
 	// Create config object (new interface)
 	config := map[string]interface{}{
