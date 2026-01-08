@@ -9,6 +9,7 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/buffer"
+	"github.com/dop251/goja_nodejs/console"
 	"github.com/dop251/goja_nodejs/require"
 )
 
@@ -101,16 +102,12 @@ func NewJSEngine() *JSEngine {
 	}
 }
 
-func (e *JSEngine) enableRequires(vm *goja.Runtime) {
-	e.registry.Enable(vm)
-}
-
 // ExecuteResponse executes an inject script and returns the response
 func (e *JSEngine) ExecuteResponse(script string, req *models.Request) (*models.IsResponse, error) {
 	vm := goja.New()
 	new(require.Registry).Enable(vm)
 	buffer.Enable(vm)
-
+	console.Enable(vm)
 	jsLogger := NewJSLogger("inject:response")
 
 	// Set up the request object
