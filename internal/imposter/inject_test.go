@@ -40,7 +40,14 @@ func TestJSEngine_ExecuteResponse(t *testing.T) {
 			want:    &models.IsResponse{StatusCode: 200, Body: "SGVsbG8sIFdvcmxk"},
 			wantErr: false,
 		},
+		{
+			name:   "Ensure console API is available",
+			script: `function(request, state, logger) { console.log("Test log message"); return { statusCode: 200, body: "Hello." }; }`,
+			req:    &models.Request{Method: "GET", Path: "/test"},
+			want:   &models.IsResponse{StatusCode: 200, Body: "Hello."},
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := NewJSEngine()
