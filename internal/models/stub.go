@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"slices"
 	"sync/atomic"
 )
 
@@ -74,6 +75,16 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	type Alias Response
+	temp := struct {
+		Alias
+		Behaviorss []Behavior `json:"behaviors,omitempty"`
+	}{}
+
+	if err := json.Unmarshal(data, &temp); err != nil {
+		return err
+	}
+
 	// Check if any of the response type fields are set
 	if standard.Is != nil || standard.Proxy != nil || standard.Inject != "" || standard.Fault != "" {
 		*r = Response(standard)
@@ -91,7 +102,7 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 	if isResp.StatusCode != 0 || isResp.Body != nil || isResp.Headers != nil || isResp.Data != "" {
 		r.Is = &isResp
 		r.Repeat = standard.Repeat
-		r.Behaviors = standard.Behaviors
+		r.Behaviors = slices.Concat(standard.Behaviors, temp.Behaviorss)
 		r.isShorthand = true // Mark as shorthand format
 		return nil
 	}
