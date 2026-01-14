@@ -1,0 +1,61 @@
+{{template "header" .}}
+
+{{if .Notices}}
+<div id='notice'>
+{{range .Notices}}
+  <div><a href='#'>{{.Version}}</a> was released {{.When}}</div>
+{{end}}
+</div>
+{{end}}
+
+<h1>Welcome, friend</h1>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud
+exercitation ullamco laboris.</p>
+
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.</p>
+
+<h2>How it works</h2>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent euismod
+<em>imposters</em> to act as on-demand test doubles. Your test communicates
+to the server over http using the <a href='#'>api</a> to set up
+<a href='#'>stubs</a>, <a href='#'>record and replay proxies</a>,
+and verify <a href='#'>mock expectations</a>.</p>
+
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua.</p>
+
+<h2>Testimonials</h2>
+
+<blockquote>
+  <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit.</p>
+  <p class='cite'>Placeholder Author</p>
+</blockquote>
+
+<blockquote>
+  <p class='quote'>Ut enim ad minim veniam, quis nostrud exercitation.</p>
+  <p class='cite'>Another Placeholder</p>
+</blockquote>
+
+<h2>Why tartuffe?</h2>
+
+<p>Lorem ipsum dolor sit amet:</p>
+
+<dl>
+  <dt>Easy to get started</dt>
+  <dd>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+    tempor incididunt ut labore et dolore magna aliqua.</dd>
+
+  <dt>A platform, not just a tool</dt>
+  <dd>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi
+    ut aliquip ex ea commodo consequat.</dd>
+
+  <dt>Powerful</dt>
+  <dd>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum
+    dolore eu fugiat nulla pariatur.</dd>
+</dl>
+
+{{template "footer" .}}

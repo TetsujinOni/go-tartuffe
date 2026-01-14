@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/TetsujinOni/go-tartuffe/internal/repository"
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 )
 
 // ImposterHandler handles individual imposter operations
@@ -37,6 +39,34 @@ func (h *ImposterHandler) GetImposter(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response.WriteError(w, http.StatusInternalServerError, response.ErrCodeBadData, err.Error())
+		return
+	}
+
+	// Content negotiation: HTML for browsers, JSON for API clients
+	if web.AcceptsHTML(r) {
+		// Convert requests and stubs to JSON strings for display
+		requests := make([]interface{}, len(imp.Requests))
+		for i, req := range imp.Requests {
+			jsonBytes, _ := json.MarshalIndent(req, "", "  ")
+			requests[i] = string(jsonBytes)
+		}
+		stubs := make([]interface{}, len(imp.Stubs))
+		for i, stub := range imp.Stubs {
+			jsonBytes, _ := json.MarshalIndent(stub, "", "  ")
+			stubs[i] = string(jsonBytes)
+		}
+
+		data := web.ImposterPageData{
+			PageData: web.PageData{
+				Title:       "imposter information",
+				Description: "Placeholder description for imposter page.",
+			},
+			Protocol: imp.Protocol,
+			Port:     imp.Port,
+			Requests: requests,
+			Stubs:    stubs,
+		}
+		web.Render(w, "imposter.html", data)
 		return
 	}
 

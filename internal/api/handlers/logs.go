@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 )
 
 // LogEntry represents a single log entry
@@ -75,6 +76,27 @@ func (h *LogsHandler) GetLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	logs := h.logs[startIndex:endIndex]
+
+	// Content negotiation: HTML for browsers, JSON for API clients
+	if web.AcceptsHTML(r) {
+		webLogs := make([]web.LogEntry, len(logs))
+		for i, log := range logs {
+			webLogs[i] = web.LogEntry{
+				Level:   log.Level,
+				Message: log.Message,
+			}
+		}
+		data := web.LogsPageData{
+			PageData: web.PageData{
+				Title:       "logs",
+				Description: "Placeholder description for logs page.",
+			},
+			Logs:      webLogs,
+			LogsCount: len(h.logs),
+		}
+		web.Render(w, "logs.html", data)
+		return
+	}
 
 	response.WriteJSON(w, http.StatusOK, LogsResponse{Logs: logs})
 }

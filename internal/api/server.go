@@ -14,6 +14,7 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/plugin/builtin"
 	pluginrepo "github.com/TetsujinOni/go-tartuffe/internal/plugin/repository"
 	"github.com/TetsujinOni/go-tartuffe/internal/repository"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 )
 
 // Server is the main API server
@@ -157,12 +158,15 @@ func NewServer(cfg ServerConfig) *Server {
 	router.GET("/metrics", metricsHandler.GetMetrics)
 
 	// Apply middleware chain
-	handler := Logger(
-		CORSWithOrigin(cfg.Origin)(
-			APIKeyAuth(cfg.APIKey)(
-				IPWhitelist(cfg.IPWhitelist)(
-					LocalOnly(cfg.LocalOnly)(
-						JSONBody(router))))))
+	// StaticFiles serves static assets from /public/
+	staticHandler := web.StaticHandler()
+	handler := StaticFiles(staticHandler)(
+		Logger(
+			CORSWithOrigin(cfg.Origin)(
+				APIKeyAuth(cfg.APIKey)(
+					IPWhitelist(cfg.IPWhitelist)(
+						LocalOnly(cfg.LocalOnly)(
+							JSONBody(router)))))))
 
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 

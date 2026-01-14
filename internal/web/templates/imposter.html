@@ -1,0 +1,25 @@
+{{template "header" .}}
+
+<h1>{{.Protocol}} Imposter on port {{.Port}}</h1>
+
+<h2>Requests</h2>
+
+{{if .Requests}}
+{{range .Requests}}
+<pre><code>{{.}}</code></pre>
+{{end}}
+{{else}}
+<p>No requests recorded.</p>
+{{end}}
+
+<h2>Stubs</h2>
+
+{{if .Stubs}}
+{{range .Stubs}}
+<pre><code>{{.}}</code></pre>
+{{end}}
+{{else}}
+<p>No stubs configured.</p>
+{{end}}
+
+{{template "footer" .}}

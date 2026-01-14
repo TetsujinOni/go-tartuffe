@@ -1,0 +1,103 @@
+{{define "header"}}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>tartuffe - {{.Title}}</title>
+    <meta charset='utf-8'>
+    <meta name='description' content='{{.Description}}' />
+
+    <link rel='stylesheet' type='text/css' href='/public/css/application.css' />
+
+    <script src='https://code.jquery.com/jquery-3.6.1.min.js'></script>
+    <script src='/public/js/urlHashHandler.js'></script>
+  </head>
+  <body>
+    <div id='main'>
+      <header>
+        <a href='/'><h1 style='font-size: 2em; margin: 0;'>tartuffe</h1></a>
+        <p>over the wire test doubles</p>
+
+        <nav class='horizontal'>
+          <ul>
+            <li><a href='/'>home</a></li>
+            <li><a href='/imposters'>imposters</a></li>
+            <li><a href='/logs'>logs</a></li>
+            <li><a href='/config'>config</a></li>
+            <li><a href='/metrics' title='Prometheus metrics'>metrics</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <hr />
+
+      <div id='sidenav'>
+        <h3>documentation</h3>
+        <nav class='vertical'>
+          <ul>
+            <li><a href='#'>getting started</a></li>
+            <li><a href='#'>mental model</a></li>
+            <li><a href='#'>command line</a></li>
+            <li><a href='#'>security</a></li>
+            <li><a href='#'>faqs</a></li>
+          </ul>
+
+          <p>api:</p>
+          <ul>
+            <li><a href='#'>overview</a></li>
+            <li><a href='#'>contracts</a></li>
+            <li><a href='#'>mock verification</a></li>
+            <li><a href='#'>stub responses</a></li>
+            <li>
+              <ul>
+                <li><a href='#'>proxies</a></li>
+                <li><a href='#'>injection</a></li>
+                <li><a href='#'>behaviors</a></li>
+                <li><a href='#'>faults</a></li>
+              </ul>
+            </li>
+            <li><a href='#'>stub predicates</a></li>
+            <li>
+              <ul>
+                <li><a href='#'>xpath</a></li>
+                <li><a href='#'>json</a></li>
+                <li><a href='#'>jsonpath</a></li>
+              </ul>
+            </li>
+            <li><a href='#'>errors</a></li>
+          </ul>
+
+          <p>builtin protocols:</p>
+          <ul>
+            <li><a href='#'>http</a></li>
+            <li><a href='#'>https</a></li>
+            <li><a href='#'>tcp</a></li>
+            <li><a href='#'>smtp</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div id='content'>
+{{end}}
+
+{{define "footer"}}
+      </div>
+    </div>
+
+    <hr />
+
+    <footer>
+      <nav class='horizontal'>
+        <ul>
+          <li>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</li>
+          <li><a href='#'>releases</a></li>
+          <li><a href='#'>contributing</a></li>
+          <li><a href='#'>license</a></li>
+          <li><a href='#'>source</a></li>
+          <li><a href='#'>issues</a></li>
+        </ul>
+      </nav>
+    </footer>
+
+  </body>
+</html>
+{{end}}
