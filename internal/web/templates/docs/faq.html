@@ -1,0 +1,58 @@
+{{template "header" .}}
+
+<h1>Frequently Asked Questions</h1>
+
+<h2>General Questions</h2>
+
+<h3>What is tartuffe?</h3>
+<p>Tartuffe is an open source tool providing test doubles over the wire. It allows
+you to create stub servers that respond with canned responses, proxy servers that
+record and replay traffic, and mock servers that verify expected calls were made.</p>
+
+<h3>How is tartuffe different from mountebank?</h3>
+<p>Tartuffe is a Go implementation compatible with mountebank's API. Key differences:</p>
+<ul class='bullet-list'>
+  <li>Written in Go instead of Node.js</li>
+  <li>Single binary with no runtime dependencies</li>
+  <li>Lower memory footprint</li>
+  <li>JavaScript injection uses an embedded engine rather than Node.js</li>
+</ul>
+
+<!-- TODO: Document complete list of differences between tartuffe and mountebank -->
+
+<h3>Can I use tartuffe as a drop-in replacement for mountebank?</h3>
+<p>In most cases, yes. Tartuffe aims to be wire-compatible with mountebank's REST API.
+However, some advanced features (particularly around JavaScript injection and custom
+formatters) may have subtle differences.</p>
+
+<h2>Configuration</h2>
+
+<h3>How do I start tartuffe?</h3>
+<p>Simply run <code>tartuffe</code> from the command line. By default, it listens on
+port 2525. See the <a href='/docs/commandLine'>command line</a> page for all options.</p>
+
+<h3>How do I enable JavaScript injection?</h3>
+<p>Start tartuffe with the <code>--allowInjection</code> flag. Be sure to read the
+<a href='/docs/security'>security page</a> first.</p>
+
+<h3>How do I persist imposters between restarts?</h3>
+<p>Use the <code>--datadir</code> option to specify a directory for persistent storage,
+or use the <code>--configfile</code> option to load imposters from a JSON file at startup.</p>
+
+<h2>Troubleshooting</h2>
+
+<h3>Why isn't my predicate matching?</h3>
+<p>Start tartuffe with <code>--debug</code> to enable the <code>matches</code> array
+in GET /imposters/:port responses. This shows exactly which predicates matched or didn't
+match for each request.</p>
+
+<h3>Why am I getting "port in use" errors?</h3>
+<p>Each imposter requires a unique port. Make sure you're not trying to create multiple
+imposters on the same port, and that no other process is using the port.</p>
+
+<h3>How do I see the requests made to an imposter?</h3>
+<p>Create the imposter with <code>"recordRequests": true</code>, then GET the imposter
+to see the <code>requests</code> array. See the <a href='/docs/api/mocks'>mock verification</a>
+page for details.</p>
+
+{{template "footer" .}}

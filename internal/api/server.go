@@ -118,6 +118,7 @@ func NewServer(cfg ServerConfig) *Server {
 	configHandler := handlers.NewConfigHandler(cfg.Port, cfg.Host, cfg.AllowInjection, cfg.LocalOnly, cfg.Debug, cfg.IPWhitelist, cfg.Origin, startTime.Unix())
 	logsHandler := handlers.NewLogsHandler()
 	metricsHandler := handlers.NewMetricsHandler()
+	docsHandler := handlers.NewDocsHandler()
 
 	// Create router
 	router := NewRouter()
@@ -156,6 +157,10 @@ func NewServer(cfg ServerConfig) *Server {
 
 	// Prometheus metrics endpoint
 	router.GET("/metrics", metricsHandler.GetMetrics)
+
+	// Documentation routes
+	router.GET("/docs", docsHandler.ServeDoc)
+	router.GET("/docs/{path:.*}", docsHandler.ServeDoc)
 
 	// Apply middleware chain
 	// StaticFiles serves static assets from /public/

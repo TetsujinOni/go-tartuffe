@@ -1,0 +1,66 @@
+{{template "header" .}}
+
+<h1>Proxies</h1>
+
+<p>Proxies are one of the most powerful features of tartuffe. They allow you to create
+a test double that records real responses from a downstream system and replays them
+during subsequent test runs.</p>
+
+<h2>Proxy Modes</h2>
+
+<p>Tartuffe supports three proxy modes:</p>
+
+<table>
+  <tr>
+    <th>Mode</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>proxyOnce</code></td>
+    <td>Proxies the request on the first call and saves the response. Subsequent
+    calls with matching predicates will return the saved response.</td>
+  </tr>
+  <tr>
+    <td><code>proxyAlways</code></td>
+    <td>Always proxies the request to the downstream system and saves every response.
+    Useful for recording multiple variations of responses.</td>
+  </tr>
+  <tr>
+    <td><code>proxyTransparent</code></td>
+    <td>Always proxies the request but does not save responses. Useful for pass-through
+    scenarios where you just want to observe traffic.</td>
+  </tr>
+</table>
+
+<h2>Example</h2>
+
+<p>The following example creates a proxy that forwards requests to a downstream API:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "responses": [{
+      "proxy": {
+        "to": "http://api.example.com",
+        "mode": "proxyOnce",
+        "predicateGenerators": [{
+          "matches": {
+            "method": true,
+            "path": true,
+            "query": true
+          }
+        }]
+      }
+    }]
+  }]
+}</code></pre>
+
+<h2>Predicate Generators</h2>
+
+<p>Predicate generators tell tartuffe how to create predicates from the proxied request.
+This determines how subsequent requests will be matched to saved responses.</p>
+
+<!-- TODO: tartuffe may have differences in predicate generator behavior -->
+
+{{template "footer" .}}

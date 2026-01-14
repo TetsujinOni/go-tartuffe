@@ -1,0 +1,67 @@
+{{template "header" .}}
+
+<h1>Mock Verification</h1>
+
+<p>While stubs return canned responses, mocks also record the requests made to them
+for later verification. This allows you to assert that your application made the
+expected calls to external services.</p>
+
+<h2>Enabling Request Recording</h2>
+
+<p>To enable mock verification, set <code>recordRequests</code> to <code>true</code>
+when creating an imposter:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "recordRequests": true,
+  "stubs": [{
+    "responses": [{
+      "is": { "body": "OK" }
+    }]
+  }]
+}</code></pre>
+
+<h2>Retrieving Recorded Requests</h2>
+
+<p>After your tests have run, you can retrieve the recorded requests by making a
+<code>GET</code> request to the imposter:</p>
+
+<pre><code>GET /imposters/4545 HTTP/1.1
+Host: localhost:2525
+Accept: application/json</code></pre>
+
+<p>The response will include a <code>requests</code> array containing all recorded requests:</p>
+
+<pre><code>{
+  "protocol": "http",
+  "port": 4545,
+  "numberOfRequests": 2,
+  "recordRequests": true,
+  "requests": [
+    {
+      "requestFrom": "127.0.0.1:60523",
+      "method": "POST",
+      "path": "/api/users",
+      "query": {},
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": "{\"name\": \"John\"}",
+      "timestamp": "2024-01-09T02:30:31.022Z"
+    }
+  ],
+  "stubs": [...]
+}</code></pre>
+
+<h2>Clearing Recorded Requests</h2>
+
+<p>To clear recorded requests without deleting the imposter, use:</p>
+
+<pre><code>DELETE /imposters/4545/savedRequests HTTP/1.1
+Host: localhost:2525</code></pre>
+
+<p class='warning-icon'><strong>Note:</strong> Recording requests represents a memory leak for
+any long-running tartuffe process, as requests are never automatically forgotten.</p>
+
+{{template "footer" .}}

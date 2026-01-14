@@ -1,0 +1,88 @@
+{{template "header" .}}
+
+<h1>JSONPath</h1>
+
+<p>JSONPath predicates allow you to select specific values from JSON documents in request fields.
+This is useful when you need to match requests based on specific JSON content.</p>
+
+<h2>Usage</h2>
+
+<p>Use the <code>jsonpath</code> parameter on any predicate to scope the match to selected JSON content:</p>
+
+<pre><code>{
+  "predicates": [{
+    "equals": { "body": "test-value" },
+    "jsonpath": {
+      "selector": "$.item.name"
+    }
+  }],
+  "responses": [{
+    "is": { "body": "Matched!" }
+  }]
+}</code></pre>
+
+<h2>JSONPath Syntax</h2>
+
+<table>
+  <tr>
+    <th>Expression</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>$</code></td>
+    <td>Root object</td>
+  </tr>
+  <tr>
+    <td><code>.property</code></td>
+    <td>Child property</td>
+  </tr>
+  <tr>
+    <td><code>..property</code></td>
+    <td>Recursive descent</td>
+  </tr>
+  <tr>
+    <td><code>[n]</code></td>
+    <td>Array index</td>
+  </tr>
+  <tr>
+    <td><code>[*]</code></td>
+    <td>All array elements</td>
+  </tr>
+</table>
+
+<h2>Example</h2>
+
+<p>Given this request body:</p>
+
+<pre><code>{
+  "order": {
+    "items": [
+      { "name": "Widget", "quantity": 5 },
+      { "name": "Gadget", "quantity": 3 }
+    ]
+  }
+}</code></pre>
+
+<p>The following predicates would match:</p>
+
+<pre><code>// Match first item name
+{
+  "predicates": [{
+    "equals": { "body": "Widget" },
+    "jsonpath": {
+      "selector": "$.order.items[0].name"
+    }
+  }]
+}
+
+// Match any item with name "Gadget"
+{
+  "predicates": [{
+    "equals": { "body": "Gadget" },
+    "jsonpath": {
+      "selector": "$.order.items[*].name"
+    }
+  }]
+}</code></pre>
+
+{{template "footer" .}}

@@ -1,0 +1,124 @@
+{{template "header" .}}
+
+<h1>Getting Started</h1>
+
+<p><b>Install:</b></p>
+
+<!-- TODO: tartuffe installation differs from mountebank - need to document Go binary installation -->
+<pre><code>go install github.com/TetsujinOni/go-tartuffe/cmd/tartuffe@latest</code></pre>
+
+<p><b>Run:</b></p>
+
+<pre><code>tartuffe</code></pre>
+
+<p><b>Alternative install methods:</b></p>
+
+<!-- TODO: Document Docker image once available -->
+<p>You can also build from source:</p>
+
+<pre><code>git clone https://github.com/TetsujinOni/go-tartuffe.git
+cd go-tartuffe
+go build -o tartuffe ./cmd/tartuffe
+./tartuffe</code></pre>
+
+<p><b>Use:</b></p>
+
+<p>By default, tartuffe listens on port 2525, but that's not the port that your
+imposters (test doubles) will listen on. To show a couple different kinds of
+imposters, let's create both an http imposter and a tcp one. We'll use the
+<code>curl</code> command line tool to call tartuffe's
+<a href='/docs/api/overview'>api</a>. The following command creates the
+http imposter, listening on port 4545, by <code>POST</code>ing to
+http://localhost:2525/imposters with the given body.
+The <code>predicates</code> are optional - if you don't include any, the stub
+always matches, and the response is always sent.</p>
+
+<p class='info-icon'>The <a href='/docs/api/contracts'>contracts page</a>
+provides an easy to use exploration of the JSON structure.</p>
+
+<pre><code>curl -i -X POST -H 'Content-Type: application/json' http://localhost:2525/imposters --data '{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "responses": [
+      { "is": { "statusCode": 400 }}
+    ],
+    "predicates": [{
+      "and": [
+        {
+          "equals": {
+            "path": "/test",
+            "method": "POST",
+            "headers": { "Content-Type": "application/json" }
+          }
+        },
+        {
+          "not": {
+            "contains": { "body": "requiredField" },
+            "caseSensitive": true
+          }
+        }
+      ]
+    }]
+  }]
+}'</code></pre>
+
+<p>Let's test it out:</p>
+
+<pre><code>curl -i -X POST -H 'Content-Type: application/json' http://localhost:4545/test --data '{"optionalField": true}'</code></pre>
+
+<p>Expected response:</p>
+<pre><code>HTTP/1.1 400 Bad Request
+Connection: close
+Date: Sat, 04 Jan 2014 02:48:16 GMT
+Transfer-Encoding: chunked</code></pre>
+
+<p>Had we not tailored the request to match the predicates, we would have instead received
+the default response. For instance, let's send a request that leaves off the Content-Type:</p>
+
+<pre><code>curl -i -X POST http://localhost:4545/test --data '{"optionalField": true}'</code></pre>
+
+<p>Expected response:</p>
+<pre><code>HTTP/1.1 200 OK
+Connection: close
+Date: Sat, 04 Jan 2014 02:48:16 GMT
+Transfer-Encoding: chunked</code></pre>
+
+<p>Tartuffe can stub binary tcp equally well, which is convenient when your application integrates
+with a downstream system using one of the myriad binary RPC
+protocols. Those protocols tend to rely on language-specific serialization to return an object
+graph. Your test can use the same serialization code to create a binary stream of the object you want
+the imposter to return during an RPC call, and encode it as a base64 string. That string is what you
+send to the imposter. In the example below, we're telling the imposter to respond with a base64-encoded
+string of "hello, world!" when a tcp request containing the string "sayHello" is sent to port 5555, which
+could correspond to the method name serialized in the RPC call:</p>
+
+<pre><code>curl -i -X POST -H 'Content-Type: application/json' http://localhost:2525/imposters --data '{
+  "port": 5555,
+  "protocol": "tcp",
+  "mode": "binary",
+  "stubs": [{
+    "responses": [
+      { "is": { "data": "aGVsbG8sIHdvcmxkIQ==" }}
+    ],
+    "predicates": [{ "contains": { "data": "c2F5SGVsbG8=" } }]
+  }]
+}'</code></pre>
+
+<p>We'll use <code>nc</code> (netcat) to make the tcp request, which is like <code>telnet</code>
+but easier to script.</p>
+
+<pre><code>echo "Calling sayHello over binary protocol" | nc localhost 5555</code></pre>
+
+<p>Expected response:</p>
+<pre><code>hello, world!</code></pre>
+
+<p>Finally, we can shut down both imposters by issuing an HTTP <code>DELETE</code> to
+both imposters, which are identified by the port number on the URL:</p>
+
+<pre><code>curl -X DELETE http://localhost:2525/imposters/4545
+curl -X DELETE http://localhost:2525/imposters/5555</code></pre>
+
+<p>Explore more in the links on the left. Don't hesitate to <a href='https://github.com/TetsujinOni/go-tartuffe/issues'>ask</a> for help!</p>
+
+{{template "footer" .}}

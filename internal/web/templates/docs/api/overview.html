@@ -1,0 +1,362 @@
+{{template "header" .}}
+
+<h1>API Overview</h1>
+
+<p>Tartuffe uses a basic REST style API with standard HTTP status codes. Every effort has
+gone into providing <a href='/docs/api/errors'>response bodies</a> to help you diagnose problems.
+Each error response returned will have a <code>code</code> and <code>message</code> at a minimum.
+If extra information is available, tartuffe will happily pass it to you.</p>
+
+<h2>Capabilities</h2>
+
+<p>Tartuffe supports the following capabilities:</p>
+
+<table>
+  <tr>
+    <th style='width: 25em;'>Capability</th>
+    <th>Request Body</th>
+    <th>Response Body</th>
+  </tr>
+  <tr>
+    <td><a href='#get-home'>Get entry hypermedia</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=home'>home</a></td>
+  </tr>
+  <tr>
+    <td><a href='#post-imposters'>Create a single imposter</a></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#get-imposter'>Get a single imposter</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#add-stub'>Add a stub to an existing imposter</a></td>
+    <td><a href='/docs/api/contracts?type=addStub'>add stub</a></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#change-stub'>Overwrite a stub of an existing imposter</a></td>
+    <td><a href='/docs/api/contracts?type=stub'>stub</a></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#change-stubs'>Overwrite all stubs of an existing imposter</a></td>
+    <td><a href='/docs/api/contracts?type=stubs'>stubs</a></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#delete-stub'>Remove a stub of an existing imposter</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#delete-imposter'>Delete a single imposter</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#delete-proxy-responses'>Delete saved proxy responses from an imposter</a></td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td><a href='#delete-requests'>Delete saved requests from an imposter</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposter'>imposter</a></td>
+  </tr>
+  <tr>
+    <td><a href='#put-imposters'>Overwrite all imposters with a new set of imposters</a></td>
+    <td><a href='/docs/api/contracts?type=imposters'>imposters</a></td>
+    <td><a href='/docs/api/contracts?type=imposters'>imposters</a></td>
+  </tr>
+  <tr>
+    <td><a href='#get-imposters'>Get a list of all imposters</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposters'>imposters</a></td>
+  </tr>
+  <tr>
+    <td><a href='#delete-imposters'>Delete all imposters</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=imposters'>imposters</a></td>
+  </tr>
+  <tr>
+    <td><a href='#get-config'>Get tartuffe configuration and process information</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=config'>config</a></td>
+  </tr>
+  <tr>
+    <td><a href='#get-logs'>Get the logs</a></td>
+    <td></td>
+    <td><a href='/docs/api/contracts?type=logs'>logs</a></td>
+  </tr>
+</table>
+
+<h3 id='get-home'>Get entry hypermedia</h3>
+
+<pre><code>GET /</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=home'>home</a></p>
+
+<p>This endpoint exists for those who aspire to the
+<a href='http://martinfowler.com/articles/richardsonMaturityModel.html'>upper echelons of REST</a>,
+using hypermedia as the engine of application state.</p>
+
+<pre><code>GET / HTTP/1.1
+Host: localhost:2525
+Accept: application/json</code></pre>
+
+<p>Response:</p>
+<pre><code>HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+
+{
+  "_links": {
+    "imposters": { "href": "http://localhost:2525/imposters" },
+    "config": { "href": "http://localhost:2525/config" },
+    "logs": { "href": "http://localhost:2525/logs" }
+  }
+}</code></pre>
+
+<h3 id='post-imposters'>Create a single imposter</h3>
+
+<pre><code>POST /imposters</code></pre>
+
+<p><b>Request contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Tartuffe employs an army of imposters to fulfill your orders. Because your needs are varied
+and sundry, imposters are all different, and all are identified by a port number and associated with
+a protocol. The value you get out of tartuffe always starts by creating an imposter,
+which represents a test double listening on a socket.</p>
+
+<p><strong>Parameters:</strong></p>
+
+<p>If you don't need stubbing, then the port and protocol are all you need. The parameters
+each type of imposter accepts are explained on the page for the particular protocol
+you're interested in. See the protocols section on the sidebar on the left.</p>
+
+<p>Tartuffe expects that you will be responsible for providing the
+port, since you'll need to configure the application under test with the same
+port. However, the port is not required, and if you do not include it in the
+request, tartuffe will randomly assign one for you and return the port number
+in the response.</p>
+
+<pre><code>POST /imposters HTTP/1.1
+Host: localhost:2525
+Accept: application/json
+Content-Type: application/json
+
+{
+  "port": 4545,
+  "protocol": "http"
+}</code></pre>
+
+<p>Response:</p>
+<pre><code>HTTP/1.1 201 Created
+Location: http://localhost:2525/imposters/4545
+Content-Type: application/json; charset=utf-8
+
+{
+  "protocol": "http",
+  "port": 4545,
+  "numberOfRequests": 0,
+  "recordRequests": false,
+  "requests": [],
+  "stubs": [],
+  "_links": {
+    "self": { "href": "http://localhost:2525/imposters/4545" },
+    "stubs": { "href": "http://localhost:2525/imposters/4545/stubs" }
+  }
+}</code></pre>
+
+<p>You can also initialize <a href='/docs/api/stubs'>stubs</a> in the <code>POST</code> call.</p>
+
+<h3 id='get-imposter'>Get a single imposter</h3>
+
+<pre><code>GET /imposters/:port</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Retrieving an imposter is generally useful for one the following reasons:</p>
+
+<ul class='bullet-list'>
+  <li>You want to perform <a href='/docs/api/mocks'>mock verifications</a> by inspecting the
+    <a href='/docs/api/mocks'><code>requests</code> array</a>.</li>
+  <li>You want to debug <a href='/docs/api/predicates'>stub predicates</a> by inspecting the
+    <a href='/docs/api/stubs#matches-array'><code>matches</code> array</a> (you must run
+    with the <a href='/docs/commandLine'><code>--debug</code> command line parameter</a>).</li>
+  <li>You <a href='/docs/api/proxies'>proxied</a> a real service, and want to save off the
+    saved responses in a subsequent disconnected test run.</li>
+</ul>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>replayable</code></td>
+    <td>boolean</td>
+    <td>Set to <code>true</code> to retrieve the minimum amount of information for
+      <a href='#post-imposters'>creating the imposter</a> in the future. This leaves
+      out the <a href='/docs/api/mocks'><code>requests</code> array</a> and any hypermedia.</td>
+  </tr>
+  <tr>
+    <td><code>removeProxies</code></td>
+    <td>boolean</td>
+    <td>Set to <code>true</code> to remove all proxy responses (and stubs) from the response.
+      This is useful in record-playback scenarios where you want to seed the imposters with
+      proxy information but leave it out on subsequent test runs.</td>
+  </tr>
+</table>
+
+<h3 id='add-stub'>Add a stub to an existing imposter</h3>
+
+<pre><code>POST /imposters/:port/stubs</code></pre>
+
+<p><b>Request contract</b>: <a href='/docs/api/contracts?type=addStub'>add stub</a></p>
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>In most cases, you would add the stubs at the time you create the imposter, but this call
+allows you to add a stub to an existing imposter without restarting it. You can add the
+new stub at any index between 0 and the end of the existing array. If you leave off the
+<code>index</code> field, the stub will be added to the end of the existing <code>stubs</code>
+array.</p>
+
+<h3 id='change-stub'>Change a stub in an existing imposter</h3>
+
+<pre><code>PUT /imposters/:port/stubs/:stubIndex</code></pre>
+
+<p><b>Request contract</b>: <a href='/docs/api/contracts?type=stub'>stub</a></p>
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Use this endpoint to overwrite an existing stub without restarting the imposter.</p>
+
+<h3 id='change-stubs'>Overwrite all stubs in an existing imposter</h3>
+
+<pre><code>PUT /imposters/:port/stubs</code></pre>
+
+<p><b>Request contract</b>: <a href='/docs/api/contracts?type=stubs'>stubs</a></p>
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Use this endpoint to overwrite all existing stubs without restarting the imposter.</p>
+
+<h3 id='delete-stub'>Remove a single stub from an existing imposter</h3>
+
+<pre><code>DELETE /imposters/:port/stubs/:stubIndex</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Use this endpoint to remove the stub at the given array index without restarting the imposter.</p>
+
+<h3 id='delete-imposter'>Delete a single imposter</h3>
+
+<pre><code>DELETE /imposters/:port</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Typically you want to delete the imposter after each test run. This frees up the socket
+and removes the resource. As a convenience, the <code>DELETE</code> call also returns the
+imposter representation, allowing you to optimize the number of REST calls made during a
+test run when looking at the <code>requests</code> array for
+<a href='/docs/api/mocks'>mock verification.</a></p>
+
+<h3 id='delete-proxy-responses'>Delete saved proxy responses from an imposter</h3>
+
+<pre><code>DELETE /imposters/:port/savedProxyResponses</code></pre>
+
+<p><a href='/docs/api/proxies'>Proxy stubs</a> save all responses returned from downstream systems.
+Usually this is what you want, as they can be played back at a later time without the actual
+downstream system available. However, if you need to clear them but keep the stubs intact,
+you can do so with this call.</p>
+
+<h3 id='delete-requests'>Delete saved requests from an imposter</h3>
+
+<pre><code>DELETE /imposters/:port/savedRequests</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposter'>imposter</a></p>
+
+<p>Clear an imposter's recorded requests (used for <a href='/docs/api/mocks'>mock verification</a>)
+while leaving the rest of the imposter intact.</p>
+
+<h3 id='put-imposters'>Overwrite all imposters with a new set of imposters</h3>
+
+<pre><code>PUT /imposters</code></pre>
+
+<p><b>Request contract</b>: <a href='/docs/api/contracts?type=imposters'>imposters</a></p>
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposters'>imposters</a></p>
+
+<p>Sometimes you want to create a batch of imposters in a single call, overwriting
+any imposters already created. This call is destructive - it will first delete all
+existing imposters. The output of a <code>GET /imposters?replayable=true</code> can
+directly be replayed through this call. This call is also used during startup
+if you set the <code>--configfile</code> <a href='/docs/commandLine'>command line</a> flag.</p>
+
+<h3 id='get-imposters'>Get a list of all imposters</h3>
+
+<pre><code>GET /imposters</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposters'>imposters</a></p>
+
+<p>This is where you will come to retrieve a list of all active imposters. By default,
+tartuffe returns some basic information and hypermedia. If you want more information,
+either <a href='#get-imposter'>get the single imposter</a> or use the
+<code>replayable</code> flag.</p>
+
+<h3 id='delete-imposters'>Delete all imposters</h3>
+
+<pre><code>DELETE /imposters</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=imposters'>imposters</a></p>
+
+<p>The surest way to reset to a clean slate is to delete all imposters. Any imposter sockets
+tartuffe has open will be closed, and the response body will contain exactly what you need
+to <a href='#put-imposters'>mass create</a> the same imposters in the future.</p>
+
+<h3 id='get-config'>Get tartuffe configuration and process information</h3>
+
+<pre><code>GET /config</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=config'>config</a></p>
+
+<p>If you want to know about the environment tartuffe is running in, this resource will give you
+what you need. It describes the version, command line flags, and process information.</p>
+
+<!-- TODO: tartuffe returns Go-specific process info (goVersion vs nodeVersion) -->
+
+<h3 id='get-logs'>Get the logs</h3>
+
+<pre><code>GET /logs</code></pre>
+
+<p><b>Response contract</b>: <a href='/docs/api/contracts?type=logs'>logs</a></p>
+
+<p><strong>Query Parameters:</strong></p>
+
+<table>
+  <tr>
+    <th>Name</th>
+    <th>Type</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>startIndex</code></td>
+    <td>integer</td>
+    <td>Set to array index of the first log entry you want returned.</td>
+  </tr>
+  <tr>
+    <td><code>endIndex</code></td>
+    <td>integer</td>
+    <td>Set to the array index of the last log entry you want returned.</td>
+  </tr>
+</table>
+
+<p>In the rare scenario where tartuffe is hosted on a different server and you need access to the logs,
+they are accessible through this endpoint.</p>
+
+{{template "footer" .}}

@@ -78,24 +78,46 @@ func (rt *Router) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // match checks if a path matches a pattern and extracts parameters
 // Pattern format: /imposters/{id}/stubs/{stubIndex}
+// Special wildcard: {name:.*} matches everything including slashes
 func match(pattern, path string) (map[string]string, bool) {
 	patternParts := strings.Split(strings.Trim(pattern, "/"), "/")
 	pathParts := strings.Split(strings.Trim(path, "/"), "/")
-
-	if len(patternParts) != len(pathParts) {
-		return nil, false
-	}
 
 	params := make(map[string]string)
 
 	for i, part := range patternParts {
 		if strings.HasPrefix(part, "{") && strings.HasSuffix(part, "}") {
 			// This is a parameter
-			paramName := part[1 : len(part)-1]
-			params[paramName] = pathParts[i]
-		} else if part != pathParts[i] {
+			paramContent := part[1 : len(part)-1]
+
+			// Check for wildcard suffix pattern like {path:.*}
+			if colonIdx := strings.Index(paramContent, ":"); colonIdx != -1 {
+				paramName := paramContent[:colonIdx]
+				paramPattern := paramContent[colonIdx+1:]
+				if paramPattern == ".*" {
+					// Wildcard - capture the rest of the path
+					if i >= len(pathParts) {
+						params[paramName] = ""
+					} else {
+						params[paramName] = strings.Join(pathParts[i:], "/")
+					}
+					return params, true
+				}
+			}
+
+			// Regular parameter - must have matching path part
+			if i >= len(pathParts) {
+				return nil, false
+			}
+			params[paramContent] = pathParts[i]
+		} else if i >= len(pathParts) || part != pathParts[i] {
 			return nil, false
 		}
+	}
+
+	// Check that we consumed all path parts (unless we had a wildcard)
+	if len(patternParts) != len(pathParts) {
+		return nil, false
 	}
 
 	return params, true

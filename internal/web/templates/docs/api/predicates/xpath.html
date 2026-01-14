@@ -1,0 +1,65 @@
+{{template "header" .}}
+
+<h1>XPath</h1>
+
+<p>XPath predicates allow you to select specific values from XML documents in request fields.
+This is useful when you need to match requests based on specific XML content.</p>
+
+<h2>Usage</h2>
+
+<p>Use the <code>xpath</code> parameter on any predicate to scope the match to selected XML content:</p>
+
+<pre><code>{
+  "predicates": [{
+    "equals": { "body": "test-value" },
+    "xpath": {
+      "selector": "//item/name"
+    }
+  }],
+  "responses": [{
+    "is": { "body": "Matched!" }
+  }]
+}</code></pre>
+
+<h2>Namespaces</h2>
+
+<p>When dealing with namespaced XML, use the <code>ns</code> object to define namespace prefixes:</p>
+
+<pre><code>{
+  "predicates": [{
+    "equals": { "body": "test-value" },
+    "xpath": {
+      "selector": "//ns:item/ns:name",
+      "ns": {
+        "ns": "http://example.com/namespace"
+      }
+    }
+  }],
+  "responses": [{
+    "is": { "body": "Matched!" }
+  }]
+}</code></pre>
+
+<h2>Example</h2>
+
+<p>Given this request body:</p>
+
+<pre><code>&lt;order&gt;
+  &lt;item&gt;
+    &lt;name&gt;Widget&lt;/name&gt;
+    &lt;quantity&gt;5&lt;/quantity&gt;
+  &lt;/item&gt;
+&lt;/order&gt;</code></pre>
+
+<p>The following predicate would match:</p>
+
+<pre><code>{
+  "predicates": [{
+    "equals": { "body": "Widget" },
+    "xpath": {
+      "selector": "//item/name"
+    }
+  }]
+}</code></pre>
+
+{{template "footer" .}}

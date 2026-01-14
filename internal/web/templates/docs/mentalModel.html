@@ -1,0 +1,43 @@
+{{template "header" .}}
+
+<h1>Mental model</h1>
+
+<p>The following mental model describes how tartuffe works:</p>
+
+<!-- TODO: Create tartuffe-specific diagram or reference mountebank's diagram with attribution -->
+<p>Tartuffe follows the same mental model as <a href='https://www.mbtest.org'>mountebank</a>,
+providing test doubles that listen on sockets and respond according to configured stubs.</p>
+
+<h2>Lexicon</h2>
+
+<dl>
+  <dt>imposter</dt>
+  <dd>A server representing a test double. An <em>imposter</em> is identified by a port and
+  a protocol. Tartuffe is non-modal and can create as many <em>imposters</em> as your test requires.</dd>
+
+  <dt>stub</dt>
+  <dd>A set of configuration used to generate a response for an <em>imposter</em>. An <em>imposter</em>
+  can have 0 or more <em>stubs</em>, each of which are associated with different <em>predicates</em>.</dd>
+
+  <dt>predicate</dt>
+  <dd>A condition that determines whether a given <em>stub</em> is responsible for responding. Each
+  <em>stub</em> can have 0 or more <em>predicates</em>.</dd>
+
+  <dt>response</dt>
+  <dd>The configuration that generates the response for a <em>stub</em>. Each <em>stub</em> can have
+  0 or more <em>responses</em>.</dd>
+
+  <dt>response type</dt>
+  <dd>Defines the specific type of configuration used to generate a response. The simplest type is called
+  <em>is</em>, and allows you to define the <em>imposter's</em> response directly. Tartuffe also
+  supports a <em>proxy</em> response type, which allows record-replay behavior, and an <em>inject</em>
+  response type, which allows you to script responses. Each <em>response</em> has exactly
+  one <em>response type</em>.</dd>
+
+  <dt>stub behavior</dt>
+  <dd>Adds additional post-processing to a response, for example by adding latency to the
+  response or augmenting the response with more information. A <em>response</em> can have zero
+  or more <em>behaviors</em>, which represent a pipeline of such transformations.</dd>
+</dl>
+
+{{template "footer" .}}

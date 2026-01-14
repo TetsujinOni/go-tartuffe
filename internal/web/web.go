@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-//go:embed templates/*.html
+//go:embed templates/*.html templates/docs/*.html templates/docs/**/*.html templates/docs/**/**/*.html
 var templatesFS embed.FS
 
 //go:embed static/*
@@ -32,7 +32,43 @@ func getTemplates() (*template.Template, error) {
 			},
 		}
 
-		templates, templatesErr = template.New("").Funcs(funcMap).ParseFS(templatesFS, "templates/*.html")
+		// Parse all templates including nested docs
+		patterns := []string{
+			"templates/*.html",
+			"templates/docs/*.html",
+			"templates/docs/api/*.html",
+			"templates/docs/api/predicates/*.html",
+			"templates/docs/api/behaviors/*.html",
+			"templates/docs/api/proxy/*.html",
+			"templates/docs/cli/*.html",
+			"templates/docs/protocols/*.html",
+		}
+
+		templates = template.New("").Funcs(funcMap)
+		for _, pattern := range patterns {
+			matches, err := fs.Glob(templatesFS, pattern)
+			if err != nil {
+				templatesErr = err
+				return
+			}
+			for _, match := range matches {
+				content, err := fs.ReadFile(templatesFS, match)
+				if err != nil {
+					templatesErr = err
+					return
+				}
+				// Use just the filename as the template name for root templates,
+				// but use full path for docs templates
+				name := match
+				if strings.HasPrefix(match, "templates/") {
+					name = strings.TrimPrefix(match, "templates/")
+				}
+				_, templatesErr = templates.New(name).Parse(string(content))
+				if templatesErr != nil {
+					return
+				}
+			}
+		}
 	})
 	return templates, templatesErr
 }
@@ -149,4 +185,24 @@ type ProcessInfo struct {
 	HeapAlloc    int64
 	Uptime       int64
 	Cwd          string
+}
+
+// DocPageData contains data for documentation pages
+type DocPageData struct {
+	PageData
+	Section    string // Current section for navigation highlighting
+	Subsection string // Current subsection for navigation highlighting
+}
+
+// CodeExample represents a code example with language and content
+type CodeExample struct {
+	Language string
+	Code     string
+}
+
+// DocSection represents a documentation section with anchor
+type DocSection struct {
+	ID      string
+	Title   string
+	Content template.HTML
 }

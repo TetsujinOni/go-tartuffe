@@ -1,0 +1,111 @@
+{{template "header" .}}
+
+<h1>smtp</h1>
+
+<p>The SMTP protocol allows you to create test doubles for email sending functionality.
+This is useful for testing applications that send emails without actually sending them.</p>
+
+<h2>Imposter Creation Parameters</h2>
+
+<table>
+  <tr>
+    <th>Parameter</th>
+    <th>Options</th>
+    <th>Required?</th>
+    <th>Default</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>protocol</code></td>
+    <td><code>smtp</code></td>
+    <td>Yes</td>
+    <td>N/A</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><code>port</code></td>
+    <td>Any valid port number</td>
+    <td>No</td>
+    <td>A randomly assigned port</td>
+    <td>The port to run the imposter on</td>
+  </tr>
+  <tr>
+    <td><code>name</code></td>
+    <td>Any string</td>
+    <td>No</td>
+    <td>empty string</td>
+    <td>Included in the logs</td>
+  </tr>
+  <tr>
+    <td><code>recordRequests</code></td>
+    <td><code>true</code> or <code>false</code></td>
+    <td>No</td>
+    <td>false</td>
+    <td>Adds mock verification support</td>
+  </tr>
+</table>
+
+<h2>SMTP Requests</h2>
+
+<table>
+  <tr>
+    <th>Field</th>
+    <th>Description</th>
+    <th>Type</th>
+  </tr>
+  <tr>
+    <td><code>requestFrom</code></td>
+    <td>The client socket address</td>
+    <td>string</td>
+  </tr>
+  <tr>
+    <td><code>from</code></td>
+    <td>The MAIL FROM address</td>
+    <td>string</td>
+  </tr>
+  <tr>
+    <td><code>to</code></td>
+    <td>The RCPT TO addresses</td>
+    <td>array of strings</td>
+  </tr>
+  <tr>
+    <td><code>subject</code></td>
+    <td>The email subject</td>
+    <td>string</td>
+  </tr>
+  <tr>
+    <td><code>text</code></td>
+    <td>The plain text body</td>
+    <td>string</td>
+  </tr>
+  <tr>
+    <td><code>html</code></td>
+    <td>The HTML body</td>
+    <td>string</td>
+  </tr>
+</table>
+
+<h2>Example</h2>
+
+<pre><code>POST /imposters HTTP/1.1
+Host: localhost:2525
+Content-Type: application/json
+
+{
+  "port": 2525,
+  "protocol": "smtp",
+  "recordRequests": true
+}</code></pre>
+
+<p>Configure your application to send email to <code>localhost:2525</code>, then
+retrieve the recorded requests to verify the emails were sent correctly:</p>
+
+<pre><code>GET /imposters/2525 HTTP/1.1
+Host: localhost:2525
+Accept: application/json</code></pre>
+
+<p>The response will include the recorded email requests in the <code>requests</code> array.</p>
+
+<!-- TODO: Verify tartuffe SMTP implementation matches mountebank -->
+
+{{template "footer" .}}
