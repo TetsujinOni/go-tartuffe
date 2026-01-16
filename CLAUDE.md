@@ -34,9 +34,9 @@ The mountebank test suite validates compatibility with the original mountebank b
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (**144 passing, 108 failing - 57.1%**)
-  - Recent fixes: copy, lookup, repeat behaviors, composition (20 tests fixed)
-  - Remaining gaps: TCP injection/proxy, HTTP proxy, edge cases
+- **test:api** - API-level integration tests (**146 passing, 106 failing - 57.9%**)
+  - Recent fixes: copy, lookup, repeat behaviors, composition, TCP injection (22 tests fixed)
+  - Remaining gaps: TCP behaviors/proxy, HTTP proxy, edge cases
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -61,7 +61,7 @@ go test ./internal/... ./cmd/...
 # 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Current: 144 passing, 108 failing (252 total) = 57.1%
+# Current: 146 passing, 106 failing (252 total) = 57.9%
 
 # 5. Run mountebank JavaScript tests against go-tartuffe
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
@@ -98,7 +98,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 #### Test Results Interpretation
 
 **Current status (as of 2026-01-16 end-of-session):**
-- **test:api**: **144 passing, 108 failing (252 total) = 57.1%**
+- **test:api**: **146 passing, 106 failing (252 total) = 57.9%**
 - **test:js**: Not yet tested
 - **Target**: 75%+ passing - **MAKING PROGRESS**
 
@@ -107,15 +107,16 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 - ✅ **Lookup behavior** (6 tests) - Fixed xpath/jsonpath with namespaces
 - ✅ **Repeat behavior** (6 tests) - Fixed response cycling logic
 - ✅ **Behavior composition** (2 tests) - Fixed "behaviors" vs "_behaviors" parsing
-- **Total: +20 tests fixed**
+- ✅ **TCP injection** (2 tests) - Fixed by passing requestData via VM.Set instead of string interpolation
+- **Total: +22 tests fixed**
 
 **Remaining failure categories**:
 1. **shellTransform** (6 tests) - Expected failure (security block)
-2. **TCP injection** (~8 tests) - Injection not working in TCP context
+2. **TCP behaviors** (~6 tests) - Decorate/behaviors not working in TCP context
 3. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
 4. **HTTP proxy** (many tests) - Various proxy functionality gaps
 5. **Response format** (multiple) - Missing fields (savedRequests, numberOfRequests vs recordRequests)
-6. **Various edge cases** (~70 tests) - Case-sensitive headers, gzip support, xpath predicates in matchers, etc.
+6. **Various edge cases** (~68 tests) - Case-sensitive headers, gzip support, xpath predicates in matchers, etc.
 
 ### Running Go Tests
 
@@ -479,7 +480,7 @@ go build -o bin/tartuffe ./cmd/tartuffe
 ### Compatibility Target: MAKING PROGRESS
 
 **Target**: 75%+ compatibility
-**Current**: **57.1% (144/252 tests passing)**
+**Current**: **57.9% (146/252 tests passing)**
 
 ### Feature Status
 
@@ -497,11 +498,12 @@ go build -o bin/tartuffe ./cmd/tartuffe
 - 🔒 ShellTransform - **DISABLED for security** (6 tests intentionally fail)
 
 **Features with gaps**:
-- ❌ TCP injection - Not implemented (8+ tests failing)
+- ✅ TCP injection - **FIXED** (now working with VM.Set approach)
+- ❌ TCP behaviors - Decorate not working in TCP context (~6 tests failing)
 - ❌ TCP proxy - endOfRequestResolver issues (5+ tests failing)
 - ❌ HTTP proxy - Multiple gaps (many tests failing)
 - ❌ Response format - Missing API fields (savedRequests, numberOfRequests)
-- ❌ Various edge cases - gzip, xpath predicates in matchers, case-sensitive headers (~70 tests)
+- ❌ Various edge cases - gzip, xpath predicates in matchers, case-sensitive headers (~68 tests)
 
 ### ShellTransform Security Note:
 
@@ -532,7 +534,7 @@ When resuming work:
 
 ---
 
-**Last Updated**: 2026-01-16 (End of session - behavior fixes completed)
-**Current Compatibility**: **57.1% (144/252 passing, 108 failing)**
+**Last Updated**: 2026-01-16 (End of session - TCP injection fixed)
+**Current Compatibility**: **57.9% (146/252 passing, 106 failing)**
 **Branch**: feat/missing-backlog
-**Status**: Making progress toward 75%+ target (+20 tests this session)
+**Status**: Making progress toward 75%+ target (+22 tests this session)
