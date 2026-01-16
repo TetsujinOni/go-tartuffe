@@ -7,7 +7,7 @@ This document contains workflow hints, validation procedures, and development gu
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
 - **Compatibility Target**: 95%+ with mountebank API test suite, 100% of the mountebank JS test suite.
-- **Current Status**: **57.1% (144/252 tests passing, 108 failing)**
+- **Current Status**: **57.9% (146/252 tests passing, 106 failing)**
 
 ## Validation Workflow
 
@@ -325,6 +325,62 @@ export MB_PORT=2525
 ```
 
 These are typically set by the mountebank test harness automatically.
+
+## Recent Changes (2026-01-16)
+
+### Response Format Fix (Commit 611363e)
+
+Fixed JSON response format to match mountebank API exactly:
+
+**Issues Fixed:**
+1. `recordRequests` field was omitted when `false` (due to `omitempty` JSON tag)
+2. `numberOfRequests` field was always included, even in replayable mode
+
+**Solution:**
+- Removed `omitempty` from `recordRequests` field - now always included
+- Changed `numberOfRequests` from `int` to `*int` with `omitempty`
+  - When `nil`: excluded from JSON (replayable mode)
+  - When set: included with count (normal mode)
+- Initialize counter to 0 on imposter creation
+- Set to nil in replayable mode via `applyOptionsWithRequest()`
+
+**Files Modified:**
+- [internal/models/imposter.go](internal/models/imposter.go#L25,L57) - Field type changes
+- [internal/api/handlers/imposters.go](internal/api/handlers/imposters.go#L91-94,L258-262) - Initialization and replayable logic
+- [internal/imposter/manager.go](internal/imposter/manager.go#L547-552) - HTTP counter
+- [internal/imposter/tcp_server.go](internal/imposter/tcp_server.go#L144-150) - TCP counter
+- [internal/imposter/smtp_server.go](internal/imposter/smtp_server.go#L184-190) - SMTP counter
+- [internal/imposter/grpc_server.go](internal/imposter/grpc_server.go#L377-383) - gRPC counter
+- [internal/repository/memory.go](internal/repository/memory.go#L163-164,L181-187) - Repository counter
+- [internal/config/save.go](internal/config/save.go#L42) - Save configuration
+
+**Impact:** Fixes multiple mbTest failures expecting exact field format. +2 tests passing (146 vs 144).
+
+### TCP Behaviors Support (Commit a849142)
+
+Enabled full behavior support for TCP protocol by integrating BehaviorExecutor:
+
+**Changes:**
+- Modified `applyTCPBehaviors()` to use full BehaviorExecutor instead of limited custom handler
+- Added "data" field support in `getRequestField()` for TCP protocol
+- Added token replacement for `Data` field in TCP responses
+- Added data field to decorate response objects for TCP
+
+**Impact:** TCP behaviors (copy, decorate, lookup, wait, repeat) now work correctly.
+
+### TCP Injection Fix (Commit 631a9cc)
+
+Fixed TCP injection by passing requestData via VM.Set instead of string interpolation:
+
+**Problem:** String interpolation caused Buffer.toString() to be undefined due to scoping issues
+
+**Solution:**
+```go
+vm.Set("requestData", requestData)
+// Then in JS: Buffer.from(requestData, 'utf8')
+```
+
+**Impact:** TCP predicate and response injection now works. +2 tests passing.
 
 ## Known Issues and Workarounds
 
