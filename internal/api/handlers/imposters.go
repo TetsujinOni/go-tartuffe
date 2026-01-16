@@ -87,6 +87,12 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		imp.Stubs = []models.Stub{}
 	}
 
+	// Initialize request counter
+	if imp.NumberOfRequests == nil {
+		count := 0
+		imp.NumberOfRequests = &count
+	}
+
 	// For HTTPS imposters, extract certificate metadata
 	if imp.Protocol == "https" {
 		imp.ExtractCertMetadata()
@@ -191,6 +197,12 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 			imp.Stubs = []models.Stub{}
 		}
 
+		// Initialize request counter
+		if imp.NumberOfRequests == nil {
+			count := 0
+			imp.NumberOfRequests = &count
+		}
+
 		// For HTTPS imposters, extract certificate metadata
 		if imp.Protocol == "https" {
 			imp.ExtractCertMetadata()
@@ -255,10 +267,11 @@ func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptio
 		baseURL = buildBaseURL(r)
 	}
 
-	// In replayable mode, exclude requests and links
+	// In replayable mode, exclude requests, links, and request counter
 	if options.Replayable {
 		result.Requests = nil
 		result.Links = nil
+		result.NumberOfRequests = nil
 	} else {
 		// Add links only in non-replayable mode
 		result.Links = &models.Links{

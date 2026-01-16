@@ -29,13 +29,14 @@ lsof -ti:2525 | xargs kill -9 2>/dev/null || true
 ### Running Mountebank Test Suite
 
 The mountebank test suite validates compatibility with the original mountebank behavior.
+CRITICAL: the mountebank test suite is fragile and complicated by expecting to run a standalone copy of the system under test and then mocha tests against that running instance. this execution model makes running the mocha tests in the background have a high risk; it is more reliable and efficient to reduce orchestration complexity.
 
 #### Test Suite Overview
 
 Mountebank has several test categories:
 
 - **test:api** - API-level integration tests (**146 passing, 106 failing - 57.9%**)
-  - Recent fixes: copy, lookup, repeat behaviors, composition, TCP injection (22 tests fixed)
+  - Recent fixes: copy, lookup, repeat behaviors, composition, TCP injection, response format (recordRequests/numberOfRequests)
   - Remaining gaps: TCP behaviors/proxy, HTTP proxy, edge cases
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
@@ -108,6 +109,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 - ✅ **Repeat behavior** (6 tests) - Fixed response cycling logic
 - ✅ **Behavior composition** (2 tests) - Fixed "behaviors" vs "_behaviors" parsing
 - ✅ **TCP injection** (2 tests) - Fixed by passing requestData via VM.Set instead of string interpolation
+- ✅ **Response format** - Fixed recordRequests (always included) and numberOfRequests (pointer, omitted in replayable mode)
 - **Total: +22 tests fixed**
 
 **Remaining failure categories**:
@@ -115,8 +117,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 2. **TCP behaviors** (~6 tests) - Decorate/behaviors not working in TCP context
 3. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
 4. **HTTP proxy** (many tests) - Various proxy functionality gaps
-5. **Response format** (multiple) - Missing fields (savedRequests, numberOfRequests vs recordRequests)
-6. **Various edge cases** (~68 tests) - Case-sensitive headers, gzip support, xpath predicates in matchers, etc.
+5. **Various edge cases** (~68 tests) - Case-sensitive headers, gzip support, xpath predicates in matchers, etc.
 
 ### Running Go Tests
 
@@ -499,10 +500,10 @@ go build -o bin/tartuffe ./cmd/tartuffe
 
 **Features with gaps**:
 - ✅ TCP injection - **FIXED** (now working with VM.Set approach)
+- ✅ Response format - **FIXED** (recordRequests always included, numberOfRequests uses pointer with omitempty)
 - ❌ TCP behaviors - Decorate not working in TCP context (~6 tests failing)
 - ❌ TCP proxy - endOfRequestResolver issues (5+ tests failing)
 - ❌ HTTP proxy - Multiple gaps (many tests failing)
-- ❌ Response format - Missing API fields (savedRequests, numberOfRequests)
 - ❌ Various edge cases - gzip, xpath predicates in matchers, case-sensitive headers (~68 tests)
 
 ### ShellTransform Security Note:

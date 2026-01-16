@@ -543,7 +543,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Timestamp = time.Now().Format(time.RFC3339)
 		s.imposter.Requests = append(s.imposter.Requests, *req)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 	s.mu.Unlock()
 
 	// Find matching stub
@@ -865,7 +871,8 @@ func (s *Server) GetImposter() *models.Imposter {
 func (s *Server) ResetRequestCount() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.imposter.NumberOfRequests = 0
+	count := 0
+	s.imposter.NumberOfRequests = &count
 	s.imposter.Requests = nil
 }
 

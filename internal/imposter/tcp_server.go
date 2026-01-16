@@ -141,7 +141,13 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		}
 		s.imposter.TCPRequests = append(s.imposter.TCPRequests, tcpReq)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 	s.mu.Unlock()
 
 	// Find matching stub

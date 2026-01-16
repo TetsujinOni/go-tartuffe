@@ -374,7 +374,13 @@ func (s *GRPCServer) recordRequest(ctx context.Context, grpcReq *models.GRPCRequ
 		}
 		s.imposter.GRPCRequests = append(s.imposter.GRPCRequests, *grpcReq)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 }
 
 // applyBehaviors applies behaviors to the response

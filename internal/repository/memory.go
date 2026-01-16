@@ -160,7 +160,8 @@ func (r *InMemory) ClearRequests(port int) error {
 
 	imp.Requests = nil
 	imp.TCPRequests = nil
-	imp.NumberOfRequests = 0
+	count := 0
+	imp.NumberOfRequests = &count
 	return nil
 }
 
@@ -177,7 +178,13 @@ func (r *InMemory) AddRequest(port int, req models.Request) error {
 	if imp.RecordRequests {
 		imp.Requests = append(imp.Requests, req)
 	}
-	imp.NumberOfRequests++
+	// Increment request counter
+	if imp.NumberOfRequests == nil {
+		count := 1
+		imp.NumberOfRequests = &count
+	} else {
+		*imp.NumberOfRequests++
+	}
 
 	return nil
 }

@@ -181,7 +181,13 @@ func (s *SMTPServer) handleConnection(conn net.Conn) {
 					smtpReq.Timestamp = time.Now().Format(time.RFC3339)
 					s.imposter.SMTPRequests = append(s.imposter.SMTPRequests, *smtpReq)
 				}
-				s.imposter.NumberOfRequests++
+				// Increment request counter
+				if s.imposter.NumberOfRequests == nil {
+					count := 1
+					s.imposter.NumberOfRequests = &count
+				} else {
+					*s.imposter.NumberOfRequests++
+				}
 				s.mu.Unlock()
 
 				// Match against stubs (for logging/tracking purposes)
