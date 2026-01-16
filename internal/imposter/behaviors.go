@@ -259,13 +259,64 @@ func (e *BehaviorExecutor) extractValues(source string, using *models.Using) ([]
 	case "regex":
 		return e.extractRegex(source, using.Selector, using.Options)
 	case "xpath":
-		// XPath extraction - not implemented yet
-		return []string{source}, nil
+		return e.extractXPath(source, using.Selector, using.NS)
 	case "jsonpath":
 		return e.extractJSONPath(source, using.Selector)
 	default:
 		return []string{source}, nil
 	}
+}
+
+// extractXPath extracts values using XPath (simple implementation)
+func (e *BehaviorExecutor) extractXPath(source, selector string, namespaces map[string]string) ([]string, error) {
+	// Simple XPath implementation for basic cases
+	// Full XPath would require a library like github.com/antchfx/xmlquery
+	// For now, handle simple cases like //tagname or //prefix:tagname
+
+	// Parse selector - looking for //prefix:tagname or //tagname
+	selector = strings.TrimPrefix(selector, "//")
+
+	var targetTag string
+	var targetNS string
+
+	if strings.Contains(selector, ":") {
+		parts := strings.SplitN(selector, ":", 2)
+		prefix := parts[0]
+		targetTag = parts[1]
+
+		// Lookup namespace URL from prefix
+		if namespaces != nil {
+			targetNS = namespaces[prefix]
+		}
+	} else {
+		targetTag = selector
+	}
+
+	// Simple XML parsing - find the tag and extract its text content
+	// Look for pattern: <tagname>content</tagname> or with namespace
+	var patterns []string
+
+	if targetNS != "" {
+		// With namespace: <prefix:tagname>content</prefix:tagname>
+		for prefix, ns := range namespaces {
+			if ns == targetNS {
+				patterns = append(patterns, fmt.Sprintf("<%s:%s[^>]*>([^<]+)</%s:%s>", prefix, targetTag, prefix, targetTag))
+			}
+		}
+	}
+
+	// Without namespace: <tagname>content</tagname>
+	patterns = append(patterns, fmt.Sprintf("<%s[^>]*>([^<]+)</%s>", targetTag, targetTag))
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(source)
+		if len(matches) > 1 {
+			return []string{matches[1]}, nil
+		}
+	}
+
+	return []string{}, nil
 }
 
 // extractRegex extracts values using regex
@@ -315,6 +366,19 @@ func (e *BehaviorExecutor) extractJSONPath(source, selector string) ([]string, e
 
 	// Handle simple paths like $.field or $..field
 	selector = strings.TrimPrefix(selector, "$")
+
+	// Check for recursive descent (..)
+	if strings.HasPrefix(selector, "..") {
+		// Recursive descent - search for field anywhere in structure
+		fieldName := strings.TrimPrefix(selector, "..")
+		result := e.recursiveSearch(data, fieldName)
+		if result != "" {
+			return []string{result}, nil
+		}
+		return []string{}, nil
+	}
+
+	// Normal path navigation
 	selector = strings.TrimPrefix(selector, ".")
 
 	result := e.navigateJSON(data, selector)
@@ -323,6 +387,31 @@ func (e *BehaviorExecutor) extractJSONPath(source, selector string) ([]string, e
 	}
 
 	return []string{}, nil
+}
+
+// recursiveSearch searches for a field recursively in JSON structure
+func (e *BehaviorExecutor) recursiveSearch(data interface{}, fieldName string) string {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		// Check if field exists at this level
+		if val, exists := v[fieldName]; exists {
+			return e.jsonToString(val)
+		}
+		// Recursively search in nested objects
+		for _, val := range v {
+			if result := e.recursiveSearch(val, fieldName); result != "" {
+				return result
+			}
+		}
+	case []interface{}:
+		// Search in array elements
+		for _, item := range v {
+			if result := e.recursiveSearch(item, fieldName); result != "" {
+				return result
+			}
+		}
+	}
+	return ""
 }
 
 // navigateJSON navigates JSON structure with a simple path
