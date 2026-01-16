@@ -232,22 +232,83 @@ Based on impact and effort, recommended implementation order:
 
 ## Validation Workflow
 
+### Prerequisites
+
+Before running validation tests, stop any existing tartuffe processes to prevent port conflicts:
+
+```bash
+# Stop all tartuffe processes
+pkill -f tartuffe 2>/dev/null || true
+
+# Or kill processes on specific ports
+for port in 2525 2526 2527; do
+    lsof -ti:$port | xargs kill -9 2>/dev/null || true
+done
+```
+
 ### Running Mountebank Tests
+
+Mountebank has several test suites. For go-tartuffe validation, focus on API and JavaScript tests:
 
 ```bash
 cd /home/tetsujinoni/work/mountebank
-npm run test:api
 
-# Current results: 46 passing, 129 failing (175 total)
-# Target: 130+ passing (~75% compatibility)
+# Stop any running instances first
+pkill -f tartuffe 2>/dev/null || true
+
+# API-level integration tests (primary validation)
+npm run test:api
+# Current: 181 passing, 72 failing (253 total) = 71.5%
+# Target: 190+ passing (~75% compatibility)
+
+# JavaScript client tests (secondary validation)
+npm run test:js
+# Tests the JavaScript client library against go-tartuffe
 ```
+
+**Note:** Skip `test:cli` and `test:web` - go-tartuffe has different CLI/UI implementations.
 
 ### Running Go Tests
 
 ```bash
+cd /home/tetsujinoni/work/go-tartuffe
+
+# Run all tests
 go test ./internal/... ./cmd/...
-# All tests should pass (~8 seconds)
+# Expected: All tests pass (~5 seconds)
+
+# Run specific behavior tests
+go test ./internal/imposter -run "Test(Wait|Decorate|Copy)" -v
+
+# Run with coverage
+go test -cover ./internal/...
 ```
+
+### Full Validation Procedure
+
+For complete validation before commits:
+
+```bash
+# 1. Clean state
+cd /home/tetsujinoni/work/go-tartuffe
+pkill -f tartuffe || true
+
+# 2. Build latest
+go build -o bin/tartuffe ./cmd/tartuffe
+
+# 3. Run Go tests
+go test ./internal/... ./cmd/...
+
+# 4. Run mountebank validation
+cd /home/tetsujinoni/work/mountebank
+npm run test:api
+npm run test:js
+
+# 5. Clean up
+pkill -f tartuffe || true
+```
+
+**See [CLAUDE.md](CLAUDE.md) for detailed workflow hints and troubleshooting.**
 
 ## References
 
