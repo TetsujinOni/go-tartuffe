@@ -23,14 +23,14 @@ func TestCopyWithRegex(t *testing.T) {
 				From: map[string]interface{}{
 					"path": "$PATH",
 				},
-				Into: "${body}",
+				Into: "${userId}",
 				Using: &models.Using{
 					Method:   "regex",
 					Selector: "/users/(\\d+)",
 				},
 			},
 			requestPath: "/users/123",
-			initialBody: "User ID: ",
+			initialBody: "User ID: ${userId}",
 			wantBody:    "User ID: 123",
 		},
 		{
@@ -39,14 +39,14 @@ func TestCopyWithRegex(t *testing.T) {
 				From: map[string]interface{}{
 					"path": "$PATH",
 				},
-				Into: "${body}",
+				Into: "${resource}",
 				Using: &models.Using{
 					Method:   "regex",
 					Selector: "/api/(\\w+)/(\\d+)",
 				},
 			},
 			requestPath: "/api/users/456",
-			initialBody: "Resource: ",
+			initialBody: "Resource: ${resource}",
 			wantBody:    "Resource: users",
 		},
 	}
@@ -102,14 +102,14 @@ func TestCopyWithJSONPath(t *testing.T) {
 				From: map[string]interface{}{
 					"body": "$.user.name",
 				},
-				Into: "${body}",
+				Into: "${name}",
 				Using: &models.Using{
 					Method:   "jsonpath",
 					Selector: "$",
 				},
 			},
 			requestBody: `{"user":{"name":"Jane","age":30}}`,
-			initialBody: "Hello ",
+			initialBody: "Hello ${name}",
 			wantBody:    "Hello Jane",
 		},
 		{
@@ -118,14 +118,14 @@ func TestCopyWithJSONPath(t *testing.T) {
 				From: map[string]interface{}{
 					"body": "$.items[0].id",
 				},
-				Into: "${body}",
+				Into: "${itemId}",
 				Using: &models.Using{
 					Method:   "jsonpath",
 					Selector: "$",
 				},
 			},
 			requestBody: `{"items":[{"id":"abc123","name":"Item1"}]}`,
-			initialBody: "First item: ",
+			initialBody: "First item: ${itemId}",
 			wantBody:    "First item: abc123",
 		},
 	}
@@ -178,8 +178,10 @@ func TestCopyIntoHeader(t *testing.T) {
 
 	resp := &models.IsResponse{
 		StatusCode: 200,
-		Headers:    make(map[string]interface{}),
-		Body:       "test",
+		Headers: map[string]interface{}{
+			"X-User-ID": "${userId}",
+		},
+		Body: "test",
 	}
 
 	behavior := models.Behavior{
@@ -188,7 +190,7 @@ func TestCopyIntoHeader(t *testing.T) {
 				From: map[string]interface{}{
 					"path": "$PATH",
 				},
-				Into: "${headers}['X-User-ID']",
+				Into: "${userId}",
 				Using: &models.Using{
 					Method:   "regex",
 					Selector: "/users/(\\d+)",
@@ -225,7 +227,7 @@ func TestCopyFromQuery(t *testing.T) {
 	resp := &models.IsResponse{
 		StatusCode: 200,
 		Headers:    make(map[string]interface{}),
-		Body:       "Search query: ",
+		Body:       "Search query: ${query}",
 	}
 
 	behavior := models.Behavior{
@@ -234,7 +236,7 @@ func TestCopyFromQuery(t *testing.T) {
 				From: map[string]interface{}{
 					"query": "q",
 				},
-				Into: "${body}",
+				Into: "${query}",
 				Using: &models.Using{
 					Method:   "regex",
 					Selector: ".*",

@@ -378,80 +378,74 @@ func (e *BehaviorExecutor) jsonToString(data interface{}) string {
 	}
 }
 
-// replaceTokens replaces tokens in the response
-// token describes the target location (e.g., "${body}", "${headers}['X-ID']")
+// replaceTokens replaces token placeholders in the response
+// The "into" parameter is a token name (e.g., "${header}", "${body}", "${code}")
+// that should be replaced with the extracted values throughout the response
 func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, into string, values []string) *models.IsResponse {
+	if len(values) == 0 {
+		return resp
+	}
+
 	result := &models.IsResponse{
 		StatusCode: resp.StatusCode,
 		Headers:    make(map[string]interface{}),
 		Mode:       resp.Mode,
+		Data:       resp.Data,
 	}
 
-	// Copy headers
-	for k, v := range resp.Headers {
-		result.Headers[k] = v
+	// The "into" token can appear anywhere in the response
+	// We need to replace it with the extracted value(s)
+
+	// For single values, use the first extracted value
+	// For multiple values (from multiple capture groups), we support indexed access
+	replacementValue := values[0]
+	if len(values) > 1 {
+		// If multiple values, use the first by default
+		// Individual values can be accessed via ${token}[0], ${token}[1], etc.
+		replacementValue = values[0]
 	}
 
-	// Copy body initially
-	result.Body = resp.Body
-
-	if len(values) == 0 {
-		return result
-	}
-
-	// Parse the "into" field to determine where to place the value
-	// Examples: "${body}", "${headers}['X-User-ID']", "${body}[1]", "${code}"
-
+	// Special case: ${code} and ${statusCode} always affect status code
 	if into == "${code}" || into == "${statusCode}" {
-		// Replace status code
 		// Try to convert value to int
-		if code, err := strconv.Atoi(values[0]); err == nil {
+		if code, err := strconv.Atoi(replacementValue); err == nil {
 			result.StatusCode = code
 		} else {
-			// If not a valid int, keep as string (will be processed later)
-			result.StatusCode = values[0]
-		}
-	} else if strings.HasPrefix(into, "${body}") {
-		// Appending to body
-		if bodyStr, ok := result.Body.(string); ok {
-			result.Body = bodyStr + values[0]
-		}
-	} else if strings.HasPrefix(into, "${headers}") {
-		// Setting a header
-		// Parse header name from ${headers}['X-User-ID'] or ${headers}[X-User-ID]
-		headerName := e.extractHeaderName(into)
-		if headerName != "" {
-			result.Headers[headerName] = values[0]
+			result.StatusCode = replacementValue
 		}
 	}
 
-	return result
-}
-
-// extractHeaderName extracts header name from ${headers}['X-User-ID'] format
-func (e *BehaviorExecutor) extractHeaderName(into string) string {
-	// Match patterns like ${headers}['X-User-ID'], ${headers}["X-User-ID"], or ${headers}[X-User-ID]
-	re := regexp.MustCompile(`\$\{headers\}\[['"]?([^'"\]]+)['"]?\]`)
-	matches := re.FindStringSubmatch(into)
-	if len(matches) > 1 {
-		return matches[1]
-	}
-	return ""
-}
-
-// replaceInString replaces tokens in a string
-func (e *BehaviorExecutor) replaceInString(s, token string, values []string) string {
-	result := s
-
-	// Replace indexed tokens like ${TOKEN}[0], ${TOKEN}[1], etc.
-	for i, value := range values {
-		indexedToken := fmt.Sprintf("%s[%d]", token, i)
-		result = strings.ReplaceAll(result, indexedToken, value)
+	// Replace token in body
+	if bodyStr, ok := resp.Body.(string); ok {
+		// Replace indexed tokens ${token}[0], ${token}[1], etc.
+		replacedBody := bodyStr
+		for i, value := range values {
+			indexedToken := fmt.Sprintf("%s[%d]", into, i)
+			replacedBody = strings.ReplaceAll(replacedBody, indexedToken, value)
+		}
+		// Replace the base token
+		replacedBody = strings.ReplaceAll(replacedBody, into, replacementValue)
+		result.Body = replacedBody
+	} else {
+		result.Body = resp.Body
 	}
 
-	// Replace the base token with the first value
-	if len(values) > 0 {
-		result = strings.ReplaceAll(result, token, values[0])
+	// Replace token in headers
+	for k, v := range resp.Headers {
+		switch val := v.(type) {
+		case string:
+			// Replace indexed tokens
+			replacedVal := val
+			for i, value := range values {
+				indexedToken := fmt.Sprintf("%s[%d]", into, i)
+				replacedVal = strings.ReplaceAll(replacedVal, indexedToken, value)
+			}
+			// Replace the base token
+			replacedVal = strings.ReplaceAll(replacedVal, into, replacementValue)
+			result.Headers[k] = replacedVal
+		default:
+			result.Headers[k] = v
+		}
 	}
 
 	return result
