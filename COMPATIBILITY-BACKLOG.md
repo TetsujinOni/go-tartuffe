@@ -5,8 +5,8 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working (with MB_EXECUTABLE correctly set)
-**Overall Progress**: **55.0% raw (138/251 tests) | 57.3% adjusted (138/241 excluding security blocks)**
-**Last Updated**: 2026-01-16 (After TCP injection, behaviors, and response format fixes)
+**Overall Progress**: **59.5% raw (150/252 tests) | 62.0% adjusted (150/242 excluding security blocks)**
+**Last Updated**: 2026-01-16 (After stub overwrite URL fix)
 
 **Known Working**:
 - ✅ **Wait behavior** - Static and dynamic latency working (HTTP/HTTPS only)
@@ -28,16 +28,17 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ### Test Results Analysis
 
-**Mountebank Test Suite (API tests only)**: **138 passing, 113 failing (251 total)**
-- Raw: 55.0% (138/251)
-- Adjusted: 57.3% (138/241 excluding ~10 security-blocked tests)
+**Mountebank Test Suite (API tests only)**: **150 passing, 102 failing (252 total)**
+- Raw: 59.5% (150/252)
+- Adjusted: 62.0% (150/242 excluding ~10 security-blocked tests)
 
 **Recent Fixes** (2026-01-16):
 - ✅ **TCP injection** - Fixed by passing requestData via VM.Set (commit 631a9cc)
 - ✅ **TCP behaviors** - Integrated full BehaviorExecutor (commit a849142)
 - ✅ **Response format** - Fixed recordRequests/numberOfRequests fields (commit 611363e)
+- ✅ **Stub overwrite URLs** - Fixed absolute URLs in PUT /imposters/{id}/stubs/{index} (commit af2fcc3)
 
-**Major Remaining Failure Categories** (113 failing tests):
+**Major Remaining Failure Categories** (102 failing tests):
 
 1. **ShellTransform** (~6 tests) - **Expected failure (security block)**
    - Intentionally disabled for security (arbitrary command execution risk)
@@ -93,9 +94,9 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ## Remaining Gaps (Significant)
 
-### Status: IN PROGRESS - 57.3% adjusted compatibility
+### Status: IN PROGRESS - 62.0% adjusted compatibility
 
-With 138/241 actionable tests passing (57.3% adjusted, excluding security blocks), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
+With 150/242 actionable tests passing (62.0% adjusted, excluding security blocks), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
 
 ### Partially Working Features
 
@@ -155,7 +156,7 @@ With 138/241 actionable tests passing (57.3% adjusted, excluding security blocks
 - ❌ Metrics endpoints - failing
 - ❌ Auto-assign ports - failing
 - ❌ Case-sensitive header handling - NOT working
-- ❌ Stub overwrite PUT operations - failing
+- ✅ Stub overwrite PUT operations - FIXED
 
 ### Architectural Differences (Expected)
 
@@ -177,24 +178,24 @@ These are architectural differences, not compatibility gaps:
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Current**: **57.3% adjusted (138/241 actionable tests) | 55.0% raw (138/251 total)**
+**Current**: **62.0% adjusted (150/242 actionable tests) | 59.5% raw (150/252 total)**
 
 go-tartuffe is making progress toward the 75%+ compatibility target. Current validation shows:
 
 **Test Breakdown**:
-- ✅ 138 passing - Core behaviors, stubs, protocols working
-- ❌ 113 failing - Remaining gaps across multiple categories
+- ✅ 150 passing - Core behaviors, stubs, protocols working
+- ❌ 102 failing - Remaining gaps across multiple categories
   - ~10 failures are intentional (security blocks: shellTransform ~6, process object ~4)
-  - ~103 failures need investigation and fixes
+  - ~92 failures need investigation and fixes
 
-**Failure Category Summary** (113 tests):
+**Failure Category Summary** (102 tests):
 | Category | Est. Tests | Priority |
 |----------|-----------|----------|
 | HTTP Proxy | ~20 | High |
 | JavaScript Injection (state/async) | ~16 | Medium |
 | TCP Protocol (edge cases) | ~15 | Medium |
 | JSON/Predicates | ~15 | Medium |
-| API/Controller | ~10 | Low |
+| API/Controller | ~6 | Low |
 | ShellTransform | ~6 | Won't Fix (security) |
 | CORS | ~6 | Low |
 | Faults | ~6 | Low |
@@ -205,6 +206,7 @@ go-tartuffe is making progress toward the 75%+ compatibility target. Current val
 - ✅ TCP injection: VM.Set fix for Buffer support (commit 631a9cc)
 - ✅ TCP behaviors: Full BehaviorExecutor integration (commit a849142)
 - ✅ Response format: recordRequests/numberOfRequests fields (commit 611363e)
+- ✅ Stub overwrite URLs: Fixed absolute URLs in PUT response (commit af2fcc3)
 
 **Priority Areas for Next Session**:
 1. **HTTP Proxy** (~20 tests) - ProxyOnce/ProxyAlways modes, predicate generators
