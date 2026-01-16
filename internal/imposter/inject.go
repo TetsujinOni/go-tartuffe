@@ -16,6 +16,13 @@ import (
 // scriptPreviewLength is the max length of script shown in error messages
 const scriptPreviewLength = 100
 
+// quoteJSString quotes a string for use in JavaScript, escaping special characters
+func quoteJSString(s string) string {
+	// Use JSON encoding which properly escapes for JavaScript
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 // JSLogger provides logging functions to JavaScript code
 type JSLogger struct {
 	context string // e.g., "inject:response", "inject:predicate"
@@ -298,35 +305,33 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 
 	jsLogger := NewJSLogger("inject:tcp-predicate")
 
-	// Set up the request object (TCP has simpler structure)
-	reqObj := map[string]interface{}{
-		"data": requestData,
-	}
-
-	// Set up both old and new interfaces
-	vm.Set("request", reqObj)
+	// Set up logger object
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// New interface: config object
-	configObj := map[string]interface{}{
-		"request": reqObj,
-		"logger":  jsLogger.createLoggerObject(),
-	}
-	vm.Set("config", configObj)
-
-	// Try new interface first (config parameter), fall back to old interface
+	// Create combined script that sets up request, config and executes the function
+	// This ensures all variables are in the same scope
 	wrappedScript := fmt.Sprintf(`
 		(function() {
+			// Set up request with Buffer data
+			var request = { data: Buffer.from(%s, 'utf8') };
+			var config = { request: request, logger: logger };
+
 			var fn = %s;
 			// Try new interface first (single config parameter)
-			var result = fn(config);
-			// If result is undefined, try old interface (request, logger)
-			if (result === undefined) {
-				result = fn(request, logger);
+			try {
+				var result = fn(config);
+				// If result is not undefined/null, return it
+				if (result !== undefined && result !== null) {
+					return result;
+				}
+			} catch (e) {
+				// New interface failed, will try old interface
 			}
-			return result;
+
+			// Try old interface (request, logger)
+			return fn(request, logger);
 		})()
-	`, script)
+	`, quoteJSString(requestData), script)
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
@@ -350,42 +355,39 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 	console.Enable(vm)
 	jsLogger := NewJSLogger("inject:tcp-response")
 
-	// Set up the request object
-	reqObj := map[string]interface{}{
-		"data": requestData,
-	}
-
 	// Ensure state is not nil
 	if state == nil {
 		state = make(map[string]interface{})
 	}
 
-	// Set up both old and new interfaces
-	vm.Set("request", reqObj)
+	// Set state and logger in VM
 	vm.Set("state", state)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// New interface: config object
-	configObj := map[string]interface{}{
-		"request": reqObj,
-		"state":   state,
-		"logger":  jsLogger.createLoggerObject(),
-	}
-	vm.Set("config", configObj)
-
-	// Try new interface first (config parameter), fall back to old interface
+	// Create combined script that sets up request, config and executes the function
+	// This ensures all variables are in the same scope
 	wrappedScript := fmt.Sprintf(`
 		(function() {
+			// Set up request with Buffer data
+			var request = { data: Buffer.from(%s, 'utf8') };
+			var config = { request: request, state: state, logger: logger };
+
 			var fn = %s;
 			// Try new interface first (single config parameter)
-			var result = fn(config);
-			// If result is undefined, try old interface (request, state, logger)
-			if (result === undefined) {
-				result = fn(request, state, logger);
+			try {
+				var result = fn(config);
+				// If result is not undefined/null, return it
+				if (result !== undefined && result !== null) {
+					return result;
+				}
+			} catch (e) {
+				// New interface failed, will try old interface
 			}
-			return result;
+
+			// Try old interface (request, state, logger)
+			return fn(request, state, logger);
 		})()
-	`, script)
+	`, quoteJSString(requestData), script)
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {

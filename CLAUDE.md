@@ -6,7 +6,7 @@ This document contains workflow hints, validation procedures, and development gu
 
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
-- **Compatibility Target**: 75%+ with mountebank test suite
+- **Compatibility Target**: 95%+ with mountebank API test suite, 100% of the mountebank JS test suite.
 - **Current Status**: **57.1% (144/252 tests passing, 108 failing)**
 
 ## Validation Workflow
