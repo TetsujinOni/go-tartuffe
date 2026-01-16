@@ -16,6 +16,13 @@ import (
 // scriptPreviewLength is the max length of script shown in error messages
 const scriptPreviewLength = 100
 
+// quoteJSString quotes a string for use in JavaScript, escaping special characters
+func quoteJSString(s string) string {
+	// Use JSON encoding which properly escapes for JavaScript
+	b, _ := json.Marshal(s)
+	return string(b)
+}
+
 // JSLogger provides logging functions to JavaScript code
 type JSLogger struct {
 	context string // e.g., "inject:response", "inject:predicate"
@@ -287,4 +294,122 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string
 	}
 
 	return result.ToBoolean(), nil
+}
+
+// ExecuteTCPPredicate executes an inject predicate script for TCP protocol
+// Supports both old interface (request, logger) and new interface (config)
+func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool, error) {
+	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+
+	jsLogger := NewJSLogger("inject:tcp-predicate")
+
+	// Set up logger object
+	vm.Set("logger", jsLogger.createLoggerObject())
+
+	// Create combined script that sets up request, config and executes the function
+	// This ensures all variables are in the same scope
+	vm.Set("requestData", requestData)
+
+	wrappedScript := fmt.Sprintf(`
+		(function() {
+			// Set up request with Buffer data
+			var request = { data: Buffer.from(requestData, 'utf8') };
+			var config = { request: request, logger: logger };
+
+			var fn = %s;
+			// Try new interface first (single config parameter)
+			try {
+				var result = fn(config);
+				// If result is not undefined/null, return it
+				if (result !== undefined && result !== null) {
+					return result;
+				}
+			} catch (e) {
+				// New interface failed, will try old interface
+			}
+
+			// Try old interface (request, logger)
+			return fn(request, logger);
+		})()
+	`, script)
+
+	result, err := vm.RunString(wrappedScript)
+	if err != nil {
+		// Include preview of request data for debugging
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return false, formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	return result.ToBoolean(), nil
+}
+
+// ExecuteTCPResponse executes an inject script for TCP response
+// Supports both old interface (request, state, logger) and new interface (config)
+func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state map[string]interface{}) (string, error) {
+	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+	console.Enable(vm)
+	jsLogger := NewJSLogger("inject:tcp-response")
+
+	// Ensure state is not nil
+	if state == nil {
+		state = make(map[string]interface{})
+	}
+
+	// Set state and logger in VM
+	vm.Set("state", state)
+	vm.Set("logger", jsLogger.createLoggerObject())
+	vm.Set("requestData", requestData)
+
+	// Create combined script that sets up request, config and executes the function
+	// This ensures all variables are in the same scope
+	wrappedScript := fmt.Sprintf(`
+		(function() {
+			// Set up request with Buffer data
+			var request = { data: Buffer.from(requestData, 'utf8') };
+			var config = { request: request, state: state, logger: logger };
+
+			var fn = %s;
+			// Try new interface first (single config parameter)
+			try {
+				var result = fn(config);
+				// If result is not undefined/null, return it
+				if (result !== undefined && result !== null) {
+					return result;
+				}
+			} catch (e) {
+				// New interface failed, will try old interface
+			}
+
+			// Try old interface (request, state, logger)
+			return fn(request, state, logger);
+		})()
+	`, script)
+
+	result, err := vm.RunString(wrappedScript)
+	if err != nil {
+		// Include preview of request data for debugging
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return "", formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	// Extract the data field from the returned object
+	exported := result.Export()
+	if respMap, ok := exported.(map[string]interface{}); ok {
+		if data, ok := respMap["data"]; ok {
+			return fmt.Sprintf("%v", data), nil
+		}
+	}
+
+	// If not an object with data field, convert directly to string
+	return fmt.Sprintf("%v", exported), nil
 }

@@ -2,12 +2,10 @@ package imposter
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,6 +27,11 @@ func NewBehaviorExecutor(jsEngine *JSEngine) *BehaviorExecutor {
 	}
 }
 
+// ApplyBehaviors applies all behaviors to a response
+func (e *BehaviorExecutor) ApplyBehaviors(req *models.Request, resp *models.IsResponse, behaviors []models.Behavior) (*models.IsResponse, error) {
+	return e.Execute(req, resp, behaviors)
+}
+
 // Execute applies all behaviors to a response
 func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse, behaviors []models.Behavior) (*models.IsResponse, error) {
 	if len(behaviors) == 0 {
@@ -42,24 +45,28 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 
 		// Handle wait behavior
 		if behavior.Wait != nil {
-			if err = e.executeWait(behavior.Wait); err != nil {
+			if err = e.executeWait(req, behavior.Wait); err != nil {
 				return nil, fmt.Errorf("wait behavior error: %w", err)
 			}
 		}
 
-		// Handle copy behavior
-		if behavior.Copy != nil {
-			result, err = e.executeCopy(req, result, behavior.Copy)
-			if err != nil {
-				return nil, fmt.Errorf("copy behavior error: %w", err)
+		// Handle copy behavior (can be array of copy operations)
+		if len(behavior.Copy) > 0 {
+			for _, copyOp := range behavior.Copy {
+				result, err = e.executeCopy(req, result, &copyOp)
+				if err != nil {
+					return nil, fmt.Errorf("copy behavior error: %w", err)
+				}
 			}
 		}
 
-		// Handle lookup behavior
-		if behavior.Lookup != nil {
-			result, err = e.executeLookup(req, result, behavior.Lookup)
-			if err != nil {
-				return nil, fmt.Errorf("lookup behavior error: %w", err)
+		// Handle lookup behavior (can be array of lookup operations)
+		if len(behavior.Lookup) > 0 {
+			for _, lookupOp := range behavior.Lookup {
+				result, err = e.executeLookup(req, result, &lookupOp)
+				if err != nil {
+					return nil, fmt.Errorf("lookup behavior error: %w", err)
+				}
 			}
 		}
 
@@ -71,12 +78,11 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 			}
 		}
 
-		// Handle shellTransform behavior
-		if behavior.ShellTransform != "" {
-			result, err = e.executeShellTransform(req, result, behavior.ShellTransform)
-			if err != nil {
-				return nil, fmt.Errorf("shellTransform behavior error: %w", err)
-			}
+		// ShellTransform is not supported for security reasons
+		// See docs/SECURITY.md for details
+		if behavior.ShellTransform != nil {
+			// ShellTransform can be string or []string, either way it's not supported
+			return nil, fmt.Errorf("shellTransform behavior is not supported (security risk)")
 		}
 	}
 
@@ -84,7 +90,7 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 }
 
 // executeWait adds latency to the response
-func (e *BehaviorExecutor) executeWait(wait interface{}) error {
+func (e *BehaviorExecutor) executeWait(req *models.Request, wait interface{}) error {
 	var milliseconds int
 
 	switch v := wait.(type) {
@@ -98,7 +104,7 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 			milliseconds = ms
 		} else {
 			// Try to execute as JavaScript function
-			ms, err := e.executeWaitFunction(v)
+			ms, err := e.executeWaitFunction(req, v)
 			if err != nil {
 				return err
 			}
@@ -106,6 +112,10 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 		}
 	default:
 		return fmt.Errorf("invalid wait value type: %T", wait)
+	}
+
+	if milliseconds < 0 {
+		return fmt.Errorf("wait value cannot be negative: %d", milliseconds)
 	}
 
 	if milliseconds > 0 {
@@ -116,13 +126,24 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 }
 
 // executeWaitFunction executes a JavaScript function to get wait time
-func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
+func (e *BehaviorExecutor) executeWaitFunction(req *models.Request, script string) (int, error) {
 	vm := goja.New()
 	jsLogger := NewJSLogger("behavior:wait")
+
+	// Create request object
+	requestObj := map[string]interface{}{
+		"method":  req.Method,
+		"path":    req.Path,
+		"query":   req.Query,
+		"headers": req.Headers,
+		"body":    req.Body,
+	}
+
+	vm.Set("request", requestObj)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// Wrap and execute the function
-	wrappedScript := fmt.Sprintf(`(%s)()`, script)
+	// Wrap and execute the function with request parameter
+	wrappedScript := fmt.Sprintf(`(%s)(request)`, script)
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
 		return 0, formatJSError(err, script, "wait behavior")
@@ -134,6 +155,8 @@ func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
 		return int(v), nil
 	case float64:
 		return int(v), nil
+	case int:
+		return v, nil
 	default:
 		return 0, fmt.Errorf("wait function must return a number, got %T", v)
 	}
@@ -159,6 +182,11 @@ func (e *BehaviorExecutor) executeCopy(req *models.Request, resp *models.IsRespo
 		values = []string{fromValue}
 	}
 
+	// If no values extracted, return original response
+	if len(values) == 0 {
+		return resp, nil
+	}
+
 	// Replace tokens in response
 	result := e.replaceTokens(resp, copyConfig.Into, values)
 	return result, nil
@@ -170,11 +198,28 @@ func (e *BehaviorExecutor) getFromValue(req *models.Request, from interface{}) s
 	case string:
 		return e.getRequestField(req, v)
 	case map[string]interface{}:
-		// Nested field access like {"query": "id"}
+		// Nested field access like {"query": "id"} or {"path": "$PATH"}
 		for field, subfield := range v {
 			// If it's a map field like query or headers
 			if subfieldStr, ok := subfield.(string); ok {
 				switch strings.ToLower(field) {
+				case "path":
+					// Return the path itself if value is $PATH or similar
+					if strings.HasPrefix(subfieldStr, "$") {
+						return req.Path
+					}
+					// Otherwise treat as JSONPath or XPath selector
+					return req.Path
+				case "body":
+					// If value starts with $, it's a JSONPath selector
+					if strings.HasPrefix(subfieldStr, "$") {
+						// Extract using JSONPath
+						values, err := e.extractJSONPath(req.Body, subfieldStr)
+						if err == nil && len(values) > 0 {
+							return values[0]
+						}
+					}
+					return req.Body
 				case "query":
 					if req.Query != nil {
 						return req.Query[subfieldStr]
@@ -204,6 +249,9 @@ func (e *BehaviorExecutor) getRequestField(req *models.Request, field string) st
 		return req.Path
 	case "body":
 		return req.Body
+	case "data":
+		// For TCP protocol, "data" refers to the request body
+		return req.Body
 	default:
 		return ""
 	}
@@ -215,13 +263,64 @@ func (e *BehaviorExecutor) extractValues(source string, using *models.Using) ([]
 	case "regex":
 		return e.extractRegex(source, using.Selector, using.Options)
 	case "xpath":
-		// XPath extraction - not implemented yet
-		return []string{source}, nil
+		return e.extractXPath(source, using.Selector, using.NS)
 	case "jsonpath":
 		return e.extractJSONPath(source, using.Selector)
 	default:
 		return []string{source}, nil
 	}
+}
+
+// extractXPath extracts values using XPath (simple implementation)
+func (e *BehaviorExecutor) extractXPath(source, selector string, namespaces map[string]string) ([]string, error) {
+	// Simple XPath implementation for basic cases
+	// Full XPath would require a library like github.com/antchfx/xmlquery
+	// For now, handle simple cases like //tagname or //prefix:tagname
+
+	// Parse selector - looking for //prefix:tagname or //tagname
+	selector = strings.TrimPrefix(selector, "//")
+
+	var targetTag string
+	var targetNS string
+
+	if strings.Contains(selector, ":") {
+		parts := strings.SplitN(selector, ":", 2)
+		prefix := parts[0]
+		targetTag = parts[1]
+
+		// Lookup namespace URL from prefix
+		if namespaces != nil {
+			targetNS = namespaces[prefix]
+		}
+	} else {
+		targetTag = selector
+	}
+
+	// Simple XML parsing - find the tag and extract its text content
+	// Look for pattern: <tagname>content</tagname> or with namespace
+	var patterns []string
+
+	if targetNS != "" {
+		// With namespace: <prefix:tagname>content</prefix:tagname>
+		for prefix, ns := range namespaces {
+			if ns == targetNS {
+				patterns = append(patterns, fmt.Sprintf("<%s:%s[^>]*>([^<]+)</%s:%s>", prefix, targetTag, prefix, targetTag))
+			}
+		}
+	}
+
+	// Without namespace: <tagname>content</tagname>
+	patterns = append(patterns, fmt.Sprintf("<%s[^>]*>([^<]+)</%s>", targetTag, targetTag))
+
+	for _, pattern := range patterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindStringSubmatch(source)
+		if len(matches) > 1 {
+			return []string{matches[1]}, nil
+		}
+	}
+
+	return []string{}, nil
 }
 
 // extractRegex extracts values using regex
@@ -258,13 +357,32 @@ func (e *BehaviorExecutor) extractJSONPath(source, selector string) ([]string, e
 	// Simple JSONPath implementation for common cases
 	// Full JSONPath would require a library
 
+	// If selector is just "$", return the source as-is
+	if selector == "$" {
+		return []string{source}, nil
+	}
+
 	var data interface{}
 	if err := json.Unmarshal([]byte(source), &data); err != nil {
-		return []string{}, nil
+		// If source is not valid JSON, return it as-is
+		return []string{source}, nil
 	}
 
 	// Handle simple paths like $.field or $..field
 	selector = strings.TrimPrefix(selector, "$")
+
+	// Check for recursive descent (..)
+	if strings.HasPrefix(selector, "..") {
+		// Recursive descent - search for field anywhere in structure
+		fieldName := strings.TrimPrefix(selector, "..")
+		result := e.recursiveSearch(data, fieldName)
+		if result != "" {
+			return []string{result}, nil
+		}
+		return []string{}, nil
+	}
+
+	// Normal path navigation
 	selector = strings.TrimPrefix(selector, ".")
 
 	result := e.navigateJSON(data, selector)
@@ -273,6 +391,31 @@ func (e *BehaviorExecutor) extractJSONPath(source, selector string) ([]string, e
 	}
 
 	return []string{}, nil
+}
+
+// recursiveSearch searches for a field recursively in JSON structure
+func (e *BehaviorExecutor) recursiveSearch(data interface{}, fieldName string) string {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		// Check if field exists at this level
+		if val, exists := v[fieldName]; exists {
+			return e.jsonToString(val)
+		}
+		// Recursively search in nested objects
+		for _, val := range v {
+			if result := e.recursiveSearch(val, fieldName); result != "" {
+				return result
+			}
+		}
+	case []interface{}:
+		// Search in array elements
+		for _, item := range v {
+			if result := e.recursiveSearch(item, fieldName); result != "" {
+				return result
+			}
+		}
+	}
+	return ""
 }
 
 // navigateJSON navigates JSON structure with a simple path
@@ -328,60 +471,86 @@ func (e *BehaviorExecutor) jsonToString(data interface{}) string {
 	}
 }
 
-// replaceTokens replaces tokens in the response
-func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, token string, values []string) *models.IsResponse {
+// replaceTokens replaces token placeholders in the response
+// The "into" parameter is a token name (e.g., "${header}", "${body}", "${code}")
+// that should be replaced with the extracted values throughout the response
+func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, into string, values []string) *models.IsResponse {
+	if len(values) == 0 {
+		return resp
+	}
+
 	result := &models.IsResponse{
 		StatusCode: resp.StatusCode,
 		Headers:    make(map[string]interface{}),
 		Mode:       resp.Mode,
+		Data:       resp.Data,
 	}
 
-	// Copy headers
-	for k, v := range resp.Headers {
-		if str, ok := v.(string); ok {
-			result.Headers[k] = e.replaceInString(str, token, values)
+	// The "into" token can appear anywhere in the response
+	// We need to replace it with the extracted value(s)
+
+	// For single values, use the first extracted value
+	// For multiple values (from multiple capture groups), we support indexed access
+	replacementValue := values[0]
+	if len(values) > 1 {
+		// If multiple values, use the first by default
+		// Individual values can be accessed via ${token}[0], ${token}[1], etc.
+		replacementValue = values[0]
+	}
+
+	// Special case: ${code} and ${statusCode} always affect status code
+	if into == "${code}" || into == "${statusCode}" {
+		// Try to convert value to int
+		if code, err := strconv.Atoi(replacementValue); err == nil {
+			result.StatusCode = code
 		} else {
+			result.StatusCode = replacementValue
+		}
+	}
+
+	// Replace token in body
+	if bodyStr, ok := resp.Body.(string); ok {
+		// Replace indexed tokens ${token}[0], ${token}[1], etc.
+		replacedBody := bodyStr
+		for i, value := range values {
+			indexedToken := fmt.Sprintf("%s[%d]", into, i)
+			replacedBody = strings.ReplaceAll(replacedBody, indexedToken, value)
+		}
+		// Replace the base token
+		replacedBody = strings.ReplaceAll(replacedBody, into, replacementValue)
+		result.Body = replacedBody
+	} else {
+		result.Body = resp.Body
+	}
+
+	// Replace token in Data field (for TCP protocol)
+	if result.Data != "" {
+		replacedData := result.Data
+		for i, value := range values {
+			indexedToken := fmt.Sprintf("%s[%d]", into, i)
+			replacedData = strings.ReplaceAll(replacedData, indexedToken, value)
+		}
+		// Replace the base token
+		replacedData = strings.ReplaceAll(replacedData, into, replacementValue)
+		result.Data = replacedData
+	}
+
+	// Replace token in headers
+	for k, v := range resp.Headers {
+		switch val := v.(type) {
+		case string:
+			// Replace indexed tokens
+			replacedVal := val
+			for i, value := range values {
+				indexedToken := fmt.Sprintf("%s[%d]", into, i)
+				replacedVal = strings.ReplaceAll(replacedVal, indexedToken, value)
+			}
+			// Replace the base token
+			replacedVal = strings.ReplaceAll(replacedVal, into, replacementValue)
+			result.Headers[k] = replacedVal
+		default:
 			result.Headers[k] = v
 		}
-	}
-
-	// Replace in body
-	if resp.Body != nil {
-		switch body := resp.Body.(type) {
-		case string:
-			result.Body = e.replaceInString(body, token, values)
-		default:
-			// For non-string bodies, try to marshal and replace
-			if b, err := json.Marshal(body); err == nil {
-				replaced := e.replaceInString(string(b), token, values)
-				var parsed interface{}
-				if json.Unmarshal([]byte(replaced), &parsed) == nil {
-					result.Body = parsed
-				} else {
-					result.Body = replaced
-				}
-			} else {
-				result.Body = body
-			}
-		}
-	}
-
-	return result
-}
-
-// replaceInString replaces tokens in a string
-func (e *BehaviorExecutor) replaceInString(s, token string, values []string) string {
-	result := s
-
-	// Replace indexed tokens like ${TOKEN}[0], ${TOKEN}[1], etc.
-	for i, value := range values {
-		indexedToken := fmt.Sprintf("%s[%d]", token, i)
-		result = strings.ReplaceAll(result, indexedToken, value)
-	}
-
-	// Replace the base token with the first value
-	if len(values) > 0 {
-		result = strings.ReplaceAll(result, token, values[0])
 	}
 
 	return result
@@ -403,7 +572,22 @@ func (e *BehaviorExecutor) executeLookup(req *models.Request, resp *models.IsRes
 			if using, ok := keyMap["using"].(map[string]interface{}); ok {
 				useConfig := e.parseUsing(using)
 				if values, err := e.extractValues(keyValue, useConfig); err == nil && len(values) > 0 {
-					keyValue = values[0]
+					// Check if there's an index parameter
+					index := 0
+					if idx, ok := keyMap["index"]; ok {
+						switch v := idx.(type) {
+						case int:
+							index = v
+						case float64:
+							index = int(v)
+						}
+					}
+					// Use the specified index, or first value if index out of range
+					if index < len(values) {
+						keyValue = values[index]
+					} else {
+						keyValue = values[0]
+					}
 				}
 			}
 		}
@@ -432,6 +616,16 @@ func (e *BehaviorExecutor) parseUsing(m map[string]interface{}) *models.Using {
 	}
 	if selector, ok := m["selector"].(string); ok {
 		using.Selector = selector
+	}
+	if ns, ok := m["ns"].(map[string]interface{}); ok {
+		// Convert map[string]interface{} to map[string]string
+		namespaces := make(map[string]string)
+		for k, v := range ns {
+			if str, ok := v.(string); ok {
+				namespaces[k] = str
+			}
+		}
+		using.NS = namespaces
 	}
 	return using
 }
@@ -497,6 +691,7 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 		StatusCode: resp.StatusCode,
 		Headers:    make(map[string]interface{}),
 		Mode:       resp.Mode,
+		Data:       resp.Data,
 	}
 
 	replacer := func(s string) string {
@@ -507,6 +702,16 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 			s = strings.ReplaceAll(s, fmt.Sprintf(`%s[%s]`, token, key), value)
 		}
 		return s
+	}
+
+	// Replace in status code
+	if statusStr, ok := resp.StatusCode.(string); ok {
+		replaced := replacer(statusStr)
+		if code, err := strconv.Atoi(replaced); err == nil {
+			result.StatusCode = code
+		} else {
+			result.StatusCode = replaced
+		}
 	}
 
 	// Replace in headers
@@ -566,6 +771,7 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 		"statusCode": resp.StatusCode,
 		"headers":    copyHeadersInterface(respHeaders),
 		"body":       resp.Body,
+		"data":       resp.Data, // For TCP protocol
 	}
 
 	loggerObj := jsLogger.createLoggerObject()
@@ -674,72 +880,17 @@ func (e *BehaviorExecutor) convertDecorateResult(val goja.Value, original *model
 		result.Body = b
 	}
 
+	// Extract data (for TCP protocol)
+	if d, ok := respMap["data"]; ok {
+		if dataStr, ok := d.(string); ok {
+			result.Data = dataStr
+		}
+	}
+
 	return result, nil
 }
 
-// executeShellTransform transforms response using an external command
-func (e *BehaviorExecutor) executeShellTransform(req *models.Request, resp *models.IsResponse, command string) (*models.IsResponse, error) {
-	// Prepare request and response as JSON
-	reqJSON, _ := json.Marshal(map[string]interface{}{
-		"method":  req.Method,
-		"path":    req.Path,
-		"query":   req.Query,
-		"headers": req.Headers,
-		"body":    req.Body,
-	})
-
-	respJSON, _ := json.Marshal(map[string]interface{}{
-		"statusCode": resp.StatusCode,
-		"headers":    resp.Headers,
-		"body":       resp.Body,
-	})
-
-	// Set environment variables
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Env = append(os.Environ(),
-		"MB_REQUEST="+string(reqJSON),
-		"MB_RESPONSE="+string(respJSON),
-	)
-
-	// Capture output
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("shell command failed: %w (stderr: %s)", err, stderr.String())
-	}
-
-	// Parse output as JSON response
-	var result map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("shell command returned invalid JSON: %s", stdout.String())
-	}
-
-	// Convert to IsResponse
-	newResp := &models.IsResponse{
-		StatusCode: resp.StatusCode,
-		Headers:    make(map[string]interface{}),
-	}
-
-	if sc, ok := result["statusCode"]; ok {
-		switch v := sc.(type) {
-		case float64:
-			newResp.StatusCode = int(v)
-		case int:
-			newResp.StatusCode = v
-		}
-	}
-
-	if h, ok := result["headers"].(map[string]interface{}); ok {
-		for k, v := range h {
-			newResp.Headers[k] = v
-		}
-	}
-
-	if b, ok := result["body"]; ok {
-		newResp.Body = b
-	}
-
-	return newResp, nil
-}
+// executeShellTransform is disabled for security reasons
+// ShellTransform allows arbitrary command execution which is a security risk.
+// Users should use JavaScript injection (decorate behavior) instead.
+// See docs/SECURITY.md for details and alternatives.

@@ -66,11 +66,69 @@ type Response struct {
 
 // UnmarshalJSON handles the shorthand format for defaultResponse
 // where {statusCode, body, headers} is equivalent to {is: {statusCode, body, headers}}
+// It also handles _behaviors which can be either an object (single behavior) or array
 func (r *Response) UnmarshalJSON(data []byte) error {
-	// First, try to unmarshal with standard Response format
+	// First, parse as a raw map to check for _behaviors format
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Handle behaviors (both "behaviors" and "_behaviors"): convert object format to array format
+	// Also extract repeat value if present in behaviors
+	// Check both "behaviors" and "_behaviors" fields
+	behaviorsRaw, hasBehaviors := raw["behaviors"]
+	if !hasBehaviors {
+		behaviorsRaw, hasBehaviors = raw["_behaviors"]
+	}
+
+	if hasBehaviors {
+		switch v := behaviorsRaw.(type) {
+		case map[string]interface{}:
+			// Old interface: single object with multiple behavior properties
+			// Need to split into separate behavior objects for each property
+			// Extract repeat if present and promote to response level
+			if repeatVal, hasRepeat := v["repeat"]; hasRepeat {
+				raw["repeat"] = repeatVal
+				delete(v, "repeat") // Remove from behaviors map
+			}
+
+			// Split combined behavior object into array of individual behaviors
+			behaviorArray := []interface{}{}
+			for key, value := range v {
+				behaviorObj := map[string]interface{}{
+					key: value,
+				}
+				behaviorArray = append(behaviorArray, behaviorObj)
+			}
+			raw["_behaviors"] = behaviorArray
+		case []interface{}:
+			// Already an array
+			// Extract repeat from first behavior if present
+			if len(v) > 0 {
+				if behaviorMap, ok := v[0].(map[string]interface{}); ok {
+					if repeatVal, hasRepeat := behaviorMap["repeat"]; hasRepeat {
+						raw["repeat"] = repeatVal
+					}
+				}
+			}
+			raw["_behaviors"] = v
+		}
+
+		// Remove "behaviors" field if it exists (we've normalized to "_behaviors")
+		delete(raw, "behaviors")
+	}
+
+	// Re-marshal with normalized behaviors
+	normalizedData, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	// Now unmarshal with standard Response format
 	type responseAlias Response
 	var standard responseAlias
-	if err := json.Unmarshal(data, &standard); err != nil {
+	if err := json.Unmarshal(normalizedData, &standard); err != nil {
 		return err
 	}
 
@@ -83,7 +141,7 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 
 	// Try to unmarshal as a shorthand IsResponse (for defaultResponse)
 	var isResp IsResponse
-	if err := json.Unmarshal(data, &isResp); err != nil {
+	if err := json.Unmarshal(normalizedData, &isResp); err != nil {
 		return err
 	}
 
@@ -121,7 +179,7 @@ const (
 
 // IsResponse is a static response definition
 type IsResponse struct {
-	StatusCode    int                    `json:"statusCode,omitempty"`
+	StatusCode    interface{}            `json:"statusCode,omitempty"`    // Can be int or string (for token replacement like "${code}")
 	StatusMessage string                 `json:"statusMessage,omitempty"` // For gRPC error message
 	Headers       map[string]interface{} `json:"headers,omitempty"`       // Can be string or []string for multi-value
 	Body          interface{}            `json:"body,omitempty"`
@@ -160,10 +218,57 @@ type PredicateGen struct {
 type Behavior struct {
 	Wait           interface{} `json:"wait,omitempty"`
 	Repeat         int         `json:"repeat,omitempty"`
-	Copy           *Copy       `json:"copy,omitempty"`
-	Lookup         *Lookup     `json:"lookup,omitempty"`
+	Copy           []Copy      `json:"copy,omitempty"`
+	Lookup         []Lookup    `json:"lookup,omitempty"`
 	Decorate       string      `json:"decorate,omitempty"`
-	ShellTransform string      `json:"shellTransform,omitempty"`
+	ShellTransform interface{} `json:"shellTransform,omitempty"` // Can be string or []string
+}
+
+// UnmarshalJSON handles both array and object formats for copy and lookup
+func (b *Behavior) UnmarshalJSON(data []byte) error {
+	// Parse as raw map first
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Handle copy field: convert object to array if needed
+	if copyRaw, ok := raw["copy"]; ok {
+		switch v := copyRaw.(type) {
+		case map[string]interface{}:
+			// Single copy as object - convert to array
+			raw["copy"] = []interface{}{v}
+		case []interface{}:
+			// Already an array, leave as is
+		}
+	}
+
+	// Handle lookup field: convert object to array if needed
+	if lookupRaw, ok := raw["lookup"]; ok {
+		switch v := lookupRaw.(type) {
+		case map[string]interface{}:
+			// Single lookup as object - convert to array
+			raw["lookup"] = []interface{}{v}
+		case []interface{}:
+			// Already an array, leave as is
+		}
+	}
+
+	// Re-marshal with normalized copy/lookup
+	normalizedData, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal into standard Behavior format
+	type behaviorAlias Behavior
+	var standard behaviorAlias
+	if err := json.Unmarshal(normalizedData, &standard); err != nil {
+		return err
+	}
+
+	*b = Behavior(standard)
+	return nil
 }
 
 // Copy behavior copies values from request to response

@@ -543,7 +543,13 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Timestamp = time.Now().Format(time.RFC3339)
 		s.imposter.Requests = append(s.imposter.Requests, *req)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 	s.mu.Unlock()
 
 	// Find matching stub
@@ -631,8 +637,21 @@ func (s *Server) mergeWithDefault(resp, defaultResp *models.IsResponse) *models.
 	}
 
 	// Fill in missing fields from default
-	if merged.StatusCode == 0 && defaultResp.StatusCode != 0 {
+	// StatusCode is interface{} so we need to check if it's nil or zero
+	if merged.StatusCode == nil && defaultResp.StatusCode != nil {
 		merged.StatusCode = defaultResp.StatusCode
+	} else if merged.StatusCode != nil {
+		// Check if it's a zero value
+		switch v := merged.StatusCode.(type) {
+		case int:
+			if v == 0 && defaultResp.StatusCode != nil {
+				merged.StatusCode = defaultResp.StatusCode
+			}
+		case float64:
+			if v == 0 && defaultResp.StatusCode != nil {
+				merged.StatusCode = defaultResp.StatusCode
+			}
+		}
 	}
 	if merged.Body == nil && defaultResp.Body != nil {
 		merged.Body = defaultResp.Body
@@ -735,8 +754,22 @@ func (s *Server) recordProxyStub(match *MatchResult, newStub *models.Stub) {
 func (s *Server) writeResponse(w http.ResponseWriter, resp *models.IsResponse) {
 	// Set default status code
 	statusCode := 200
-	if resp != nil && resp.StatusCode != 0 {
-		statusCode = resp.StatusCode
+	if resp != nil && resp.StatusCode != nil {
+		switch v := resp.StatusCode.(type) {
+		case int:
+			if v != 0 {
+				statusCode = v
+			}
+		case float64:
+			if v != 0 {
+				statusCode = int(v)
+			}
+		case string:
+			// If it's still a string token (not replaced by copy behavior), try to parse it
+			if code, err := strconv.Atoi(v); err == nil && code != 0 {
+				statusCode = code
+			}
+		}
 	}
 
 	// Set headers
@@ -762,7 +795,13 @@ func (s *Server) writeResponse(w http.ResponseWriter, resp *models.IsResponse) {
 
 	// Set content-type if not set and we have a body
 	if w.Header().Get("Content-Type") == "" && resp != nil && resp.Body != nil {
-		w.Header().Set("Content-Type", "application/json")
+		// Default to text/plain for string bodies, application/json for objects
+		switch resp.Body.(type) {
+		case string, []byte:
+			w.Header().Set("Content-Type", "text/plain")
+		default:
+			w.Header().Set("Content-Type", "application/json")
+		}
 	}
 
 	w.WriteHeader(statusCode)
@@ -832,7 +871,8 @@ func (s *Server) GetImposter() *models.Imposter {
 func (s *Server) ResetRequestCount() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.imposter.NumberOfRequests = 0
+	count := 0
+	s.imposter.NumberOfRequests = &count
 	s.imposter.Requests = nil
 }
 

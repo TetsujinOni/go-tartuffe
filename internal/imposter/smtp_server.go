@@ -181,7 +181,13 @@ func (s *SMTPServer) handleConnection(conn net.Conn) {
 					smtpReq.Timestamp = time.Now().Format(time.RFC3339)
 					s.imposter.SMTPRequests = append(s.imposter.SMTPRequests, *smtpReq)
 				}
-				s.imposter.NumberOfRequests++
+				// Increment request counter
+				if s.imposter.NumberOfRequests == nil {
+					count := 1
+					s.imposter.NumberOfRequests = &count
+				} else {
+					*s.imposter.NumberOfRequests++
+				}
 				s.mu.Unlock()
 
 				// Match against stubs (for logging/tracking purposes)
@@ -307,6 +313,13 @@ func (s *SMTPServer) parseEmail(clientAddr, mailFrom string, rcptTo []string, da
 		EnvelopeFrom: mailFrom,
 		EnvelopeTo:   rcptTo,
 		Priority:     "normal",
+		// Initialize empty arrays (mountebank expects [], not null)
+		To:          []models.EmailAddress{},
+		Cc:          []models.EmailAddress{},
+		Bcc:         []models.EmailAddress{},
+		References:  []string{},
+		InReplyTo:   []string{},
+		Attachments: []models.SMTPAttachment{},
 	}
 
 	// Parse headers and body

@@ -461,12 +461,13 @@ func TestProxy_InjectHeaders(t *testing.T) {
 	defer cleanup(t)
 
 	// Create target that echoes headers
+	// Headers are stored with canonical case (Go Title-Case)
 	targetScript := `function(request, state, logger) {
 		return {
 			statusCode: 200,
 			body: JSON.stringify({
-				authorization: request.headers["authorization"],
-				custom: request.headers["x-custom-header"]
+				authorization: request.headers["Authorization"],
+				custom: request.headers["X-Custom-Header"]
 			})
 		};
 	}`

@@ -55,10 +55,11 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 	}
 
 	// Convert headers to simple map (first value only)
+	// Preserve the canonical header name (Go canonicalizes to Title-Case)
 	headers := make(map[string]string)
 	for k, v := range r.Header {
 		if len(v) > 0 {
-			headers[strings.ToLower(k)] = v[0]
+			headers[k] = v[0]
 		}
 	}
 

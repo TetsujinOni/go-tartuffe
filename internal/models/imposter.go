@@ -22,7 +22,7 @@ type Imposter struct {
 	Name                 string                `json:"name,omitempty"`
 	Host                 string                `json:"host,omitempty"` // Hostname/IP to bind to (empty = all interfaces)
 	Mode                 string                `json:"mode,omitempty"` // For TCP: "text" or "binary"
-	RecordRequests       bool                  `json:"recordRequests,omitempty"`
+	RecordRequests       bool                  `json:"recordRequests"`
 	AllowCORS            bool                  `json:"allowCORS,omitempty"`            // Enable CORS preflight support
 	EndOfRequestResolver *EndOfRequestResolver `json:"endOfRequestResolver,omitempty"` // For TCP: custom request boundary detection
 	Stubs                []Stub                `json:"stubs,omitempty"`
@@ -53,8 +53,8 @@ type Imposter struct {
 	ValidFrom              string `json:"validFrom,omitempty"`              // Not Before date
 	ValidTo                string `json:"validTo,omitempty"`                // Not After date
 
-	// Internal fields (not serialized)
-	NumberOfRequests int `json:"numberOfRequests"`
+	// Internal fields (conditionally serialized)
+	NumberOfRequests *int `json:"numberOfRequests,omitempty"`
 }
 
 // TCPRequest represents a recorded TCP request
