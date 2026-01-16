@@ -310,10 +310,12 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 
 	// Create combined script that sets up request, config and executes the function
 	// This ensures all variables are in the same scope
+	vm.Set("requestData", requestData)
+
 	wrappedScript := fmt.Sprintf(`
 		(function() {
 			// Set up request with Buffer data
-			var request = { data: Buffer.from(%s, 'utf8') };
+			var request = { data: Buffer.from(requestData, 'utf8') };
 			var config = { request: request, logger: logger };
 
 			var fn = %s;
@@ -331,7 +333,7 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 			// Try old interface (request, logger)
 			return fn(request, logger);
 		})()
-	`, quoteJSString(requestData), script)
+	`, script)
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
@@ -363,13 +365,14 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 	// Set state and logger in VM
 	vm.Set("state", state)
 	vm.Set("logger", jsLogger.createLoggerObject())
+	vm.Set("requestData", requestData)
 
 	// Create combined script that sets up request, config and executes the function
 	// This ensures all variables are in the same scope
 	wrappedScript := fmt.Sprintf(`
 		(function() {
 			// Set up request with Buffer data
-			var request = { data: Buffer.from(%s, 'utf8') };
+			var request = { data: Buffer.from(requestData, 'utf8') };
 			var config = { request: request, state: state, logger: logger };
 
 			var fn = %s;
@@ -387,7 +390,7 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 			// Try old interface (request, state, logger)
 			return fn(request, state, logger);
 		})()
-	`, quoteJSString(requestData), script)
+	`, script)
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
