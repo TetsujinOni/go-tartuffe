@@ -7,7 +7,7 @@ This document contains workflow hints, validation procedures, and development gu
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
 - **Compatibility Target**: 75%+ with mountebank test suite
-- **Current Status**: **99.6% (252/253 tests passing)** 🎉
+- **Current Status**: **98.4% (248/253 tests passing, 4 shellTransform blocked)** 🎉
 
 ## Validation Workflow
 
@@ -34,7 +34,8 @@ The mountebank test suite validates compatibility with the original mountebank b
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (**252 passing, 0 failing - 99.6%!**)
+- **test:api** - API-level integration tests (**248 passing, 4 failing, 1 skipped - 98.4%!**)
+  - 4 failures are intentional: shellTransform disabled for security
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -57,7 +58,7 @@ go test ./internal/... ./cmd/...
 # 4. Run mountebank API tests
 cd /home/tetsujinoni/work/mountebank
 npm run test:api
-# Expected: 252 passing, 0 failing (253 total)
+# Expected: 248 passing, 4 failing (shellTransform), 1 skipped (253 total)
 
 # 5. Run mountebank JavaScript tests
 npm run test:js
@@ -77,12 +78,18 @@ npm run test:api
 
 #### Test Results Interpretation
 
-**Current baseline (as of 2026-01-16 evening):**
-- **test:api**: **252 passing, 0 failing (253 total) = 99.6%** ✅
+**Current baseline (as of 2026-01-16 final validation):**
+- **test:api**: **248 passing, 4 failing, 1 skipped (253 total) = 98.4%** ✅
 - **test:js**: **3 passing, 0 failing = 100%** ✅
 - **Target**: 75%+ passing - **EXCEEDED!**
 
-**All feature areas passing** - no systematic failure patterns remaining!
+**Expected failures (4 tests)**:
+- `should support shell transform without array for backwards compatibility` (HTTP)
+- `should support shell transform without array for backwards compatibility` (HTTPS)
+- `should support array of shell transforms in order` (HTTP)
+- `should support array of shell transforms in order` (HTTPS)
+
+These failures are **intentional** - shellTransform is disabled for security (arbitrary command execution risk). See [docs/SECURITY.md](../docs/SECURITY.md) for details.
 
 ### Running Go Tests
 
@@ -446,32 +453,39 @@ go build -o bin/tartuffe ./cmd/tartuffe
 ### Compatibility Target: EXCEEDED! ✅
 
 **Target**: 75%+ compatibility
-**Achieved**: **99.6% (252/253 tests passing)**
+**Achieved**: **98.4% (248/253 tests passing)**
 
-All major features are complete and all mountebank API tests are passing:
+All major features are complete:
 
-- ✅ Wait behavior
-- ✅ Decorate behavior
-- ✅ Copy behavior
-- ✅ Lookup behavior
-- ✅ Repeat behavior
-- ✅ ShellTransform (all tests passing - requires investigation)
-- ✅ HTTP/HTTPS injection
-- ✅ TCP injection
-- ✅ HTTP/HTTPS proxy (all modes)
-- ✅ TCP proxy
-- ✅ CORS support
-- ✅ Metrics
-- ✅ All fault types
-- ✅ SMTP
-- ✅ Mutual authentication
+- ✅ Wait behavior - static and dynamic latency
+- ✅ Decorate behavior - JavaScript post-processing (secure alternative to shellTransform)
+- ✅ Copy behavior - regex, xpath, JSONPath extraction
+- ✅ Lookup behavior - CSV file lookups
+- ✅ Repeat behavior - cyclic response repetition
+- 🔒 ShellTransform - **DISABLED for security** (4 tests intentionally fail)
+- ✅ HTTP/HTTPS injection - predicates, responses, state
+- ✅ TCP injection - predicates, responses, async
+- ✅ HTTP/HTTPS proxy - all modes (ProxyOnce, ProxyAlways, etc.)
+- ✅ TCP proxy - forwarding, binary data
+- ✅ CORS support - preflight, headers
+- ✅ Metrics - Prometheus-compatible
+- ✅ All fault types - connection reset, random data
+- ✅ SMTP - basic functionality
+- ✅ Mutual authentication - HTTPS mTLS
 
-### Remaining Investigation:
+### ShellTransform Security Decision:
 
-1. **ShellTransform mystery** - All tests passing despite code that should reject it
-   - Check if functionality exists in plugin system
-   - Verify error handling in test harness
-   - Document actual behavior
+**Status**: ✅ Investigation complete - Mystery solved!
+
+The initial validation showing "252 passing" used an **outdated binary** built before the security fix. After rebuilding with the current code (commit b44905a), shellTransform correctly fails with:
+
+```
+behavior error: shellTransform behavior is not supported (security risk)
+```
+
+**Why disabled**: ShellTransform allows arbitrary command execution, creating a critical command injection vulnerability.
+
+**Migration**: Users should use the `decorate` behavior with sandboxed JavaScript instead. See [docs/SECURITY.md](../docs/SECURITY.md) for examples.
 
 ## Additional Resources
 
@@ -498,7 +512,7 @@ When resuming work:
 
 ---
 
-**Last Updated**: 2026-01-16 (Evening)
-**Current Compatibility**: **99.6% (252/253 passing)** 🎉
+**Last Updated**: 2026-01-16 (Final - ShellTransform investigation complete)
+**Current Compatibility**: **98.4% (248/253 passing, 4 shellTransform blocked)** 🎉
 **Branch**: feat/missing-backlog
-**Status**: Feature parity with mountebank achieved!
+**Status**: Feature parity achieved (excluding security-blocked shellTransform)

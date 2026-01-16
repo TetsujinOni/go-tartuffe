@@ -5,29 +5,31 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working
-**Overall Progress**: **99.6% compatibility (252/253 passing, 1 skipped)**
-**Last Updated**: 2026-01-16 (Evening validation)
+**Overall Progress**: **98.4% compatibility (248/253 passing, 4 failing, 1 skipped)**
+**Last Updated**: 2026-01-16 (Final validation with security fix)
 
 **Recent Fixes**:
-- ✅ **All remaining behaviors** - Lookup, ShellTransform functionality verified
+- ✅ **Wait, Decorate, Copy behaviors** (commit 06c71be) - Dynamic latency, JavaScript post-processing, regex/JSONPath extraction
 - ✅ **All HTTP/HTTPS injection tests** - Predicate, response, state management
 - ✅ **All TCP injection tests** - Predicate, response, async support
 - ✅ **All proxy tests** - HTTP, HTTPS, TCP, ProxyOnce, ProxyAlways, mutual auth
-- ✅ **Wait, Decorate, Copy behaviors** (commit 06c71be)
+- ✅ **Lookup behavior** - CSV file lookups with key transformations
+- ✅ **Repeat behavior** - Already implemented at stub level
 - ✅ Content-Type handling for text/plain responses (commit fc977b8)
 - ✅ Test harness pidfile exit handling (commit 8be1a34)
 - ✅ **Port conflict resolution** - Cleanup procedures working correctly
+- 🔒 **ShellTransform disabled** (commit b44905a) - Security fix for command injection vulnerability
 
 ### Test Results Analysis
 
-**Mountebank Test Suite (API tests only)**: **252 passing, 0 failing**
+**Mountebank Test Suite (API tests only)**: **248 passing, 4 failing (shellTransform security block)**
 
-**Improvement**: +71 tests from previous validation (+206 from initial baseline)
+**Improvement**: +67 tests from previous validation (+202 from initial baseline)
 - Previous: 181 passing, 72 failing (71.5%)
-- Current: 252 passing, 0 failing (99.6%)
+- Current: 248 passing, 4 failing, 1 skipped (98.4%)
 
-**All Feature Areas Passing**:
-- ✅ HTTP/HTTPS Behaviors - wait, decorate, repeat, copy, lookup, shellTransform
+**All Feature Areas Passing (except security-blocked shellTransform)**:
+- ✅ HTTP/HTTPS Behaviors - wait, decorate, repeat, copy, lookup
 - ✅ HTTP/HTTPS Injection - predicates, responses, state management
 - ✅ HTTP/HTTPS Proxy - forwarding, ProxyOnce, ProxyAlways, predicate generators
 - ✅ HTTP/HTTPS Stubs - deepEquals, predicates, CRUD operations
@@ -41,28 +43,45 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 - ✅ Controller operations - GET, POST, PUT, DELETE
 - ✅ HTTPS with mutual auth
 
-**Won't Fix** (architectural): Node.js features (require(), process.env in some contexts), CLI tests (17), Web UI (5)
+**Won't Fix** (security/architectural):
+- 🔒 **ShellTransform** (4 tests) - Security risk: arbitrary command execution
+- Node.js features (require(), process.env in some contexts)
+- CLI tests (17) - Different CLI implementation
+- Web UI (5) - Different UI implementation
 
-**Note on ShellTransform**: Despite security concerns documented in [docs/SECURITY.md](docs/SECURITY.md), all shellTransform tests are passing. This requires investigation to determine if:
-1. Functionality exists elsewhere (plugin system?)
-2. Tests are handled gracefully despite the error
-3. Legacy implementation path exists
+**ShellTransform Investigation - RESOLVED**:
+
+The shellTransform mystery has been solved. Initial validation showing 252/253 passing used an **outdated binary** built before the security fix:
+
+**Timeline**:
+- Jan 16 02:57 - Binary built with shellTransform implementation
+- Jan 16 03:12 - Commit b44905a disabled shellTransform for security
+- Jan 16 04:30 - First validation used OLD binary (252 passing)
+- Jan 16 04:48 - Binary rebuilt with security block
+- Jan 16 04:49 - Verification confirmed shellTransform now fails correctly
+
+**Current behavior**: Attempting to use shellTransform returns:
+```
+behavior error: shellTransform behavior is not supported (security risk)
+```
+
+See [docs/SECURITY.md](docs/SECURITY.md) for security rationale and migration guide to `decorate` behavior.
 
 ## Remaining Gaps (Minimal)
 
 ### Status: COMPLETE ✅
 
-With 252/253 tests passing (99.6%), go-tartuffe has achieved feature parity with mountebank for all tested API functionality.
+With 248/253 tests passing (98.4%), go-tartuffe has achieved feature parity with mountebank for all tested API functionality, excluding the intentionally disabled shellTransform behavior for security reasons.
 
 ### Completed Features (All Tests Passing)
 
-#### HTTP/HTTPS Behaviors - ✅ COMPLETE
+#### HTTP/HTTPS Behaviors - ✅ COMPLETE (except shellTransform)
 - ✅ `wait` behavior - static and dynamic latency
-- ✅ `decorate` behavior - JavaScript post-processing
+- ✅ `decorate` behavior - JavaScript post-processing (secure alternative to shellTransform)
 - ✅ `copy` behavior - regex, xpath, and JSONPath extraction
 - ✅ `lookup` behavior - CSV file lookups with key transformations
 - ✅ `repeat` behavior - implemented at stub level
-- ✅ `shellTransform` behavior - all tests passing (requires investigation)
+- 🔒 `shellTransform` behavior - **DISABLED for security** (4 failing tests expected)
 - ✅ Behavior composition - multiple behaviors in sequence
 
 #### HTTP/HTTPS Injection - ✅ COMPLETE
@@ -121,9 +140,16 @@ These are architectural differences, not compatibility gaps:
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Achieved**: **99.6% compatibility (252/253 tests)**
+**Achieved**: **98.4% compatibility (248/253 tests)** 🎉
 
-go-tartuffe has achieved full feature parity with mountebank for all API functionality tested in the mountebank test suite.
+go-tartuffe has achieved full feature parity with mountebank for all API functionality tested in the mountebank test suite, with the exception of shellTransform which is intentionally disabled for security.
+
+**Test Breakdown**:
+- ✅ 248 passing - All implemented features working correctly
+- ❌ 4 failing - ShellTransform tests (intentionally blocked for security)
+- ⏭️ 1 skipped - Test infrastructure difference
+
+**Security Trade-off**: The 4 shellTransform test failures are intentional and documented. The feature allows arbitrary command execution which poses a critical security vulnerability. Users should migrate to the `decorate` behavior with sandboxed JavaScript.
 
 ## Validation Workflow
 
@@ -153,8 +179,8 @@ pkill -f tartuffe 2>/dev/null || true
 
 # API-level integration tests (primary validation)
 npm run test:api
-# Current: 181 passing, 72 failing (253 total) = 71.5%
-# Target: 190+ passing (~75% compatibility)
+# Current: 248 passing, 4 failing, 1 skipped (253 total) = 98.4%
+# Target: 75%+ passing - EXCEEDED!
 
 # JavaScript client tests (secondary validation)
 npm run test:js
