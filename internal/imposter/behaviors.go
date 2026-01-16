@@ -80,7 +80,8 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 
 		// ShellTransform is not supported for security reasons
 		// See docs/SECURITY.md for details
-		if behavior.ShellTransform != "" {
+		if behavior.ShellTransform != nil {
+			// ShellTransform can be string or []string, either way it's not supported
 			return nil, fmt.Errorf("shellTransform behavior is not supported (security risk)")
 		}
 	}
@@ -600,6 +601,16 @@ func (e *BehaviorExecutor) parseUsing(m map[string]interface{}) *models.Using {
 	}
 	if selector, ok := m["selector"].(string); ok {
 		using.Selector = selector
+	}
+	if ns, ok := m["ns"].(map[string]interface{}); ok {
+		// Convert map[string]interface{} to map[string]string
+		namespaces := make(map[string]string)
+		for k, v := range ns {
+			if str, ok := v.(string); ok {
+				namespaces[k] = str
+			}
+		}
+		using.NS = namespaces
 	}
 	return using
 }

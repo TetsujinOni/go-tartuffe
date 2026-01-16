@@ -74,18 +74,34 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Handle _behaviors: convert object format to array format
+	// Handle behaviors (both "behaviors" and "_behaviors"): convert object format to array format
 	// Also extract repeat value if present in behaviors
-	if behaviorsRaw, ok := raw["_behaviors"]; ok {
+	// Check both "behaviors" and "_behaviors" fields
+	behaviorsRaw, hasBehaviors := raw["behaviors"]
+	if !hasBehaviors {
+		behaviorsRaw, hasBehaviors = raw["_behaviors"]
+	}
+
+	if hasBehaviors {
 		switch v := behaviorsRaw.(type) {
 		case map[string]interface{}:
-			// Single behavior as object
+			// Old interface: single object with multiple behavior properties
+			// Need to split into separate behavior objects for each property
 			// Extract repeat if present and promote to response level
 			if repeatVal, hasRepeat := v["repeat"]; hasRepeat {
 				raw["repeat"] = repeatVal
+				delete(v, "repeat") // Remove from behaviors map
 			}
-			// Convert to array
-			raw["_behaviors"] = []interface{}{v}
+
+			// Split combined behavior object into array of individual behaviors
+			behaviorArray := []interface{}{}
+			for key, value := range v {
+				behaviorObj := map[string]interface{}{
+					key: value,
+				}
+				behaviorArray = append(behaviorArray, behaviorObj)
+			}
+			raw["_behaviors"] = behaviorArray
 		case []interface{}:
 			// Already an array
 			// Extract repeat from first behavior if present
@@ -96,7 +112,11 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 					}
 				}
 			}
+			raw["_behaviors"] = v
 		}
+
+		// Remove "behaviors" field if it exists (we've normalized to "_behaviors")
+		delete(raw, "behaviors")
 	}
 
 	// Re-marshal with normalized behaviors
@@ -201,7 +221,7 @@ type Behavior struct {
 	Copy           []Copy      `json:"copy,omitempty"`
 	Lookup         []Lookup    `json:"lookup,omitempty"`
 	Decorate       string      `json:"decorate,omitempty"`
-	ShellTransform string      `json:"shellTransform,omitempty"`
+	ShellTransform interface{} `json:"shellTransform,omitempty"` // Can be string or []string
 }
 
 // UnmarshalJSON handles both array and object formats for copy and lookup
