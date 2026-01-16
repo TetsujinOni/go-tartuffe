@@ -290,6 +290,7 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string
 }
 
 // ExecuteTCPPredicate executes an inject predicate script for TCP protocol
+// Supports both old interface (request, logger) and new interface (config)
 func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool, error) {
 	vm := goja.New()
 	new(require.Registry).Enable(vm)
@@ -302,14 +303,28 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 		"data": requestData,
 	}
 
+	// Set up both old and new interfaces
 	vm.Set("request", reqObj)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// Wrap the script in a function call
+	// New interface: config object
+	configObj := map[string]interface{}{
+		"request": reqObj,
+		"logger":  jsLogger.createLoggerObject(),
+	}
+	vm.Set("config", configObj)
+
+	// Try new interface first (config parameter), fall back to old interface
 	wrappedScript := fmt.Sprintf(`
 		(function() {
 			var fn = %s;
-			return fn(request, logger);
+			// Try new interface first (single config parameter)
+			var result = fn(config);
+			// If result is undefined, try old interface (request, logger)
+			if (result === undefined) {
+				result = fn(request, logger);
+			}
+			return result;
 		})()
 	`, script)
 
@@ -327,6 +342,7 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 }
 
 // ExecuteTCPResponse executes an inject script for TCP response
+// Supports both old interface (request, state, logger) and new interface (config)
 func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state map[string]interface{}) (string, error) {
 	vm := goja.New()
 	new(require.Registry).Enable(vm)
@@ -344,15 +360,30 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 		state = make(map[string]interface{})
 	}
 
+	// Set up both old and new interfaces
 	vm.Set("request", reqObj)
 	vm.Set("state", state)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// Wrap the script in a function call
+	// New interface: config object
+	configObj := map[string]interface{}{
+		"request": reqObj,
+		"state":   state,
+		"logger":  jsLogger.createLoggerObject(),
+	}
+	vm.Set("config", configObj)
+
+	// Try new interface first (config parameter), fall back to old interface
 	wrappedScript := fmt.Sprintf(`
 		(function() {
 			var fn = %s;
-			return fn(request, state, logger);
+			// Try new interface first (single config parameter)
+			var result = fn(config);
+			// If result is undefined, try old interface (request, state, logger)
+			if (result === undefined) {
+				result = fn(request, state, logger);
+			}
+			return result;
 		})()
 	`, script)
 
