@@ -43,6 +43,8 @@ Mountebank has several test categories:
 
 #### Full Validation Procedure
 
+**IMPORTANT:** The mountebank tests must use the `MB_EXECUTABLE` environment variable to test against go-tartuffe instead of the default mountebank binary.
+
 ```bash
 # 1. Ensure clean state
 cd /home/tetsujinoni/work/go-tartuffe
@@ -55,13 +57,13 @@ go build -o bin/tartuffe ./cmd/tartuffe
 go test ./internal/... ./cmd/...
 # Expected: All tests pass in ~5 seconds
 
-# 4. Run mountebank API tests
+# 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
-npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
 # Expected: 248 passing, 4 failing (shellTransform), 1 skipped (253 total)
 
-# 5. Run mountebank JavaScript tests
-npm run test:js
+# 5. Run mountebank JavaScript tests against go-tartuffe
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
 # Expected: 3 passing, 0 failing
 
 # 6. Clean up
@@ -73,8 +75,17 @@ pkill -f tartuffe || true
 ```bash
 cd /home/tetsujinoni/work/mountebank
 pkill -f tartuffe 2>/dev/null || true
-npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
 ```
+
+#### Validation Notes
+
+**Critical:** Without setting `MB_EXECUTABLE`, the mountebank tests will use the original Node.js mountebank binary instead of go-tartuffe, resulting in incorrect validation (all tests passing with original mountebank).
+
+**Setting MB_EXECUTABLE:**
+- Points mountebank tests to use tartuffe binary via wrapper script
+- The wrapper script (`tartuffe-wrapper.sh`) handles command compatibility (e.g., `mb restart`)
+- Must be an absolute path to the wrapper script
 
 #### Test Results Interpretation
 

@@ -169,6 +169,8 @@ done
 
 ### Running Mountebank Tests
 
+**CRITICAL:** Set `MB_EXECUTABLE` environment variable to test against go-tartuffe. Without it, tests will run against the original Node.js mountebank binary.
+
 Mountebank has several test suites. For go-tartuffe validation, focus on API and JavaScript tests:
 
 ```bash
@@ -178,16 +180,19 @@ cd /home/tetsujinoni/work/mountebank
 pkill -f tartuffe 2>/dev/null || true
 
 # API-level integration tests (primary validation)
-npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
 # Current: 248 passing, 4 failing, 1 skipped (253 total) = 98.4%
 # Target: 75%+ passing - EXCEEDED!
 
 # JavaScript client tests (secondary validation)
-npm run test:js
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
 # Tests the JavaScript client library against go-tartuffe
 ```
 
-**Note:** Skip `test:cli` and `test:web` - go-tartuffe has different CLI/UI implementations.
+**Important Notes:**
+- Skip `test:cli` and `test:web` - go-tartuffe has different CLI/UI implementations
+- `MB_EXECUTABLE` must point to `tartuffe-wrapper.sh` (not `tartuffe` directly) for command compatibility
+- Without `MB_EXECUTABLE`, you'll get 252/252 passing (testing original mountebank, not go-tartuffe!)
 
 ### Running Go Tests
 
@@ -220,10 +225,10 @@ go build -o bin/tartuffe ./cmd/tartuffe
 # 3. Run Go tests
 go test ./internal/... ./cmd/...
 
-# 4. Run mountebank validation
+# 4. Run mountebank validation (MUST use MB_EXECUTABLE)
 cd /home/tetsujinoni/work/mountebank
-npm run test:api
-npm run test:js
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
 
 # 5. Clean up
 pkill -f tartuffe || true
