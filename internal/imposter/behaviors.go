@@ -556,7 +556,22 @@ func (e *BehaviorExecutor) executeLookup(req *models.Request, resp *models.IsRes
 			if using, ok := keyMap["using"].(map[string]interface{}); ok {
 				useConfig := e.parseUsing(using)
 				if values, err := e.extractValues(keyValue, useConfig); err == nil && len(values) > 0 {
-					keyValue = values[0]
+					// Check if there's an index parameter
+					index := 0
+					if idx, ok := keyMap["index"]; ok {
+						switch v := idx.(type) {
+						case int:
+							index = v
+						case float64:
+							index = int(v)
+						}
+					}
+					// Use the specified index, or first value if index out of range
+					if index < len(values) {
+						keyValue = values[index]
+					} else {
+						keyValue = values[0]
+					}
 				}
 			}
 		}
@@ -650,6 +665,7 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 		StatusCode: resp.StatusCode,
 		Headers:    make(map[string]interface{}),
 		Mode:       resp.Mode,
+		Data:       resp.Data,
 	}
 
 	replacer := func(s string) string {
@@ -660,6 +676,16 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 			s = strings.ReplaceAll(s, fmt.Sprintf(`%s[%s]`, token, key), value)
 		}
 		return s
+	}
+
+	// Replace in status code
+	if statusStr, ok := resp.StatusCode.(string); ok {
+		replaced := replacer(statusStr)
+		if code, err := strconv.Atoi(replaced); err == nil {
+			result.StatusCode = code
+		} else {
+			result.StatusCode = replaced
+		}
 	}
 
 	// Replace in headers
