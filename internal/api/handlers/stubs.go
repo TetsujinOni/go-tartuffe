@@ -139,7 +139,7 @@ func (h *StubsHandler) ReplaceStub(w http.ResponseWriter, r *http.Request) {
 	_ = h.repo.AddStub(port, stub, stubIndex)
 
 	imp, _ = h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
