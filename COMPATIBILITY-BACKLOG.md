@@ -5,8 +5,8 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working (with MB_EXECUTABLE correctly set)
-**Overall Progress**: **59.5% raw (150/252 tests) | 62.0% adjusted (150/242 excluding security blocks)**
-**Last Updated**: 2026-01-16 (After stub overwrite URL fix)
+**Overall Progress**: **60.7% raw (153/252 tests) | 63.2% adjusted (153/242 excluding security blocks)**
+**Last Updated**: 2026-01-16 (After header case preservation fix)
 
 **Known Working**:
 - ✅ **Wait behavior** - Static and dynamic latency working (HTTP/HTTPS only)
@@ -28,17 +28,18 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ### Test Results Analysis
 
-**Mountebank Test Suite (API tests only)**: **150 passing, 102 failing (252 total)**
-- Raw: 59.5% (150/252)
-- Adjusted: 62.0% (150/242 excluding ~10 security-blocked tests)
+**Mountebank Test Suite (API tests only)**: **153 passing, 99 failing (252 total)**
+- Raw: 60.7% (153/252)
+- Adjusted: 63.2% (153/242 excluding ~10 security-blocked tests)
 
 **Recent Fixes** (2026-01-16):
 - ✅ **TCP injection** - Fixed by passing requestData via VM.Set (commit 631a9cc)
 - ✅ **TCP behaviors** - Integrated full BehaviorExecutor (commit a849142)
 - ✅ **Response format** - Fixed recordRequests/numberOfRequests fields (commit 611363e)
 - ✅ **Stub overwrite URLs** - Fixed absolute URLs in PUT /imposters/{id}/stubs/{index} (commit af2fcc3)
+- ✅ **Header case preservation** - Headers now saved with canonical case (commit 79605cd)
 
-**Major Remaining Failure Categories** (102 failing tests):
+**Major Remaining Failure Categories** (99 failing tests):
 
 1. **ShellTransform** (~6 tests) - **Expected failure (security block)**
    - Intentionally disabled for security (arbitrary command execution risk)
@@ -94,9 +95,9 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ## Remaining Gaps (Significant)
 
-### Status: IN PROGRESS - 62.0% adjusted compatibility
+### Status: IN PROGRESS - 63.2% adjusted compatibility
 
-With 150/242 actionable tests passing (62.0% adjusted, excluding security blocks), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
+With 153/242 actionable tests passing (63.2% adjusted, excluding security blocks), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
 
 ### Partially Working Features
 
@@ -155,7 +156,7 @@ With 150/242 actionable tests passing (62.0% adjusted, excluding security blocks
 - ✅ Response format (recordRequests, numberOfRequests) - FIXED
 - ❌ Metrics endpoints - failing
 - ❌ Auto-assign ports - failing
-- ❌ Case-sensitive header handling - NOT working
+- ✅ Case-sensitive header handling - FIXED
 - ✅ Stub overwrite PUT operations - FIXED
 
 ### Architectural Differences (Expected)
@@ -178,17 +179,17 @@ These are architectural differences, not compatibility gaps:
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Current**: **62.0% adjusted (150/242 actionable tests) | 59.5% raw (150/252 total)**
+**Current**: **63.2% adjusted (153/242 actionable tests) | 60.7% raw (153/252 total)**
 
 go-tartuffe is making progress toward the 75%+ compatibility target. Current validation shows:
 
 **Test Breakdown**:
-- ✅ 150 passing - Core behaviors, stubs, protocols working
-- ❌ 102 failing - Remaining gaps across multiple categories
+- ✅ 153 passing - Core behaviors, stubs, protocols working
+- ❌ 99 failing - Remaining gaps across multiple categories
   - ~10 failures are intentional (security blocks: shellTransform ~6, process object ~4)
-  - ~92 failures need investigation and fixes
+  - ~89 failures need investigation and fixes
 
-**Failure Category Summary** (102 tests):
+**Failure Category Summary** (99 tests):
 | Category | Est. Tests | Priority |
 |----------|-----------|----------|
 | HTTP Proxy | ~20 | High |
@@ -207,6 +208,7 @@ go-tartuffe is making progress toward the 75%+ compatibility target. Current val
 - ✅ TCP behaviors: Full BehaviorExecutor integration (commit a849142)
 - ✅ Response format: recordRequests/numberOfRequests fields (commit 611363e)
 - ✅ Stub overwrite URLs: Fixed absolute URLs in PUT response (commit af2fcc3)
+- ✅ Header case preservation: Canonical case for saved headers (commit 79605cd)
 
 **Priority Areas for Next Session**:
 1. **HTTP Proxy** (~20 tests) - ProxyOnce/ProxyAlways modes, predicate generators
