@@ -7,7 +7,7 @@ This document contains workflow hints, validation procedures, and development gu
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
 - **Compatibility Target**: 75%+ with mountebank test suite
-- **Current Status**: **49.2% (124/252 tests passing, 128 failing)**
+- **Current Status**: **57.1% (144/252 tests passing, 108 failing)**
 
 ## Validation Workflow
 
@@ -34,8 +34,9 @@ The mountebank test suite validates compatibility with the original mountebank b
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (**124 passing, 128 failing - 49.2%**)
-  - Major gaps: repeat behavior, copy/lookup behaviors, TCP injection/proxy, HTTP proxy
+- **test:api** - API-level integration tests (**144 passing, 108 failing - 57.1%**)
+  - Recent fixes: copy, lookup, repeat behaviors, composition (20 tests fixed)
+  - Remaining gaps: TCP injection/proxy, HTTP proxy, edge cases
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -60,7 +61,7 @@ go test ./internal/... ./cmd/...
 # 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Current: 124 passing, 128 failing (252 total) = 49.2%
+# Current: 144 passing, 108 failing (252 total) = 57.1%
 
 # 5. Run mountebank JavaScript tests against go-tartuffe
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
@@ -96,22 +97,25 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 
 #### Test Results Interpretation
 
-**Current baseline (as of 2026-01-16 validation):**
-- **test:api**: **124 passing, 128 failing (252 total) = 49.2%**
+**Current status (as of 2026-01-16 end-of-session):**
+- **test:api**: **144 passing, 108 failing (252 total) = 57.1%**
 - **test:js**: Not yet tested
-- **Target**: 75%+ passing - **NOT YET ACHIEVED**
+- **Target**: 75%+ passing - **MAKING PROGRESS**
 
-**Major failure categories**:
-1. **Repeat behavior** (6 tests) - Not cycling responses correctly
-2. **shellTransform** (4 tests) - Expected failure (security block)
-3. **Copy behavior** (6 tests) - Invalid JSON parse errors
-4. **Lookup behavior** (6 tests) - Invalid JSON parse errors
-5. **Behavior composition** (6 tests) - Invalid JSON parse errors
-6. **TCP injection** (~8 tests) - Injection not working in TCP context
-7. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
-8. **HTTP proxy** (many tests) - Various proxy functionality gaps
-9. **Response format** (multiple) - Missing fields (savedRequests, numberOfRequests vs recordRequests)
-10. **Various edge cases** - Case-sensitive headers, gzip support, xpath predicates, etc.
+**Recent fixes** (this session):
+- ✅ **Copy behavior** (6 tests) - Fixed array parsing, token replacement
+- ✅ **Lookup behavior** (6 tests) - Fixed xpath/jsonpath with namespaces
+- ✅ **Repeat behavior** (6 tests) - Fixed response cycling logic
+- ✅ **Behavior composition** (2 tests) - Fixed "behaviors" vs "_behaviors" parsing
+- **Total: +20 tests fixed**
+
+**Remaining failure categories**:
+1. **shellTransform** (6 tests) - Expected failure (security block)
+2. **TCP injection** (~8 tests) - Injection not working in TCP context
+3. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
+4. **HTTP proxy** (many tests) - Various proxy functionality gaps
+5. **Response format** (multiple) - Missing fields (savedRequests, numberOfRequests vs recordRequests)
+6. **Various edge cases** (~70 tests) - Case-sensitive headers, gzip support, xpath predicates in matchers, etc.
 
 ### Running Go Tests
 
@@ -472,36 +476,36 @@ go build -o bin/tartuffe ./cmd/tartuffe
 
 ## Achievement Status
 
-### Compatibility Target: NOT YET ACHIEVED
+### Compatibility Target: MAKING PROGRESS
 
 **Target**: 75%+ compatibility
-**Current**: **49.2% (124/252 tests passing)**
+**Current**: **57.1% (144/252 tests passing)**
 
 ### Feature Status
 
 **Working features**:
 - ✅ Wait behavior - static and dynamic latency
 - ✅ Decorate behavior - JavaScript post-processing
+- ✅ Copy behavior - regex, xpath, jsonpath extraction and token replacement
+- ✅ Lookup behavior - CSV lookup with xpath/jsonpath selectors and namespaces
+- ✅ Repeat behavior - response cycling
+- ✅ Behavior composition - multiple behaviors in sequence (new format)
 - ✅ HTTP/HTTPS basic stubs - is responses, basic predicates
 - ✅ TCP basic stubs - basic forwarding and responses
 - ✅ HTTPS with mutual authentication
 - ✅ SMTP - basic functionality
-- 🔒 ShellTransform - **DISABLED for security** (4 tests intentionally fail)
+- 🔒 ShellTransform - **DISABLED for security** (6 tests intentionally fail)
 
 **Features with gaps**:
-- ❌ Repeat behavior - Not cycling responses correctly (6 tests failing)
-- ❌ Copy behavior - Invalid JSON parsing (6 tests failing)
-- ❌ Lookup behavior - Invalid JSON parsing (6 tests failing)
-- ❌ Behavior composition - Invalid JSON parsing (6 tests failing)
 - ❌ TCP injection - Not implemented (8+ tests failing)
 - ❌ TCP proxy - endOfRequestResolver issues (5+ tests failing)
 - ❌ HTTP proxy - Multiple gaps (many tests failing)
 - ❌ Response format - Missing API fields (savedRequests, numberOfRequests)
-- ❌ Various edge cases - gzip, xpath, case-sensitive headers
+- ❌ Various edge cases - gzip, xpath predicates in matchers, case-sensitive headers (~70 tests)
 
 ### ShellTransform Security Note:
 
-ShellTransform is intentionally disabled (4 tests fail) as it allows arbitrary command execution, creating a critical command injection vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead. See [docs/SECURITY.md](../docs/SECURITY.md).
+ShellTransform is intentionally disabled (6 tests fail) as it allows arbitrary command execution, creating a critical command injection vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead. See [docs/SECURITY.md](../docs/SECURITY.md).
 
 ## Additional Resources
 
@@ -528,7 +532,7 @@ When resuming work:
 
 ---
 
-**Last Updated**: 2026-01-16 (Accurate validation completed)
-**Current Compatibility**: **49.2% (124/252 passing, 128 failing)**
+**Last Updated**: 2026-01-16 (End of session - behavior fixes completed)
+**Current Compatibility**: **57.1% (144/252 passing, 108 failing)**
 **Branch**: feat/missing-backlog
-**Status**: Significant work remaining to achieve 75%+ target
+**Status**: Making progress toward 75%+ target (+20 tests this session)

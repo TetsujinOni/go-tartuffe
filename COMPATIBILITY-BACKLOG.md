@@ -5,12 +5,16 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working (with MB_EXECUTABLE correctly set)
-**Overall Progress**: **49.2% compatibility (124/252 passing, 128 failing)**
-**Last Updated**: 2026-01-16 (Accurate validation with correct binary)
+**Overall Progress**: **57.1% compatibility (144/252 passing, 108 failing)**
+**Last Updated**: 2026-01-16 (After behavior composition and xpath lookup fixes)
 
 **Known Working**:
 - ✅ **Wait behavior** - Static and dynamic latency working
 - ✅ **Decorate behavior** - JavaScript post-processing working
+- ✅ **Copy behavior** - Regex, xpath, jsonpath extraction and token replacement working
+- ✅ **Lookup behavior** - CSV lookup with xpath and jsonpath selectors working
+- ✅ **Repeat behavior** - Response cycling working correctly
+- ✅ **Behavior composition** - Multiple behaviors in sequence (new format) working
 - ✅ **HTTP/HTTPS basic stubs** - Simple is responses and predicates
 - ✅ **TCP basic stubs** - Basic forwarding and binary data
 - ✅ **HTTPS mutual auth** - mTLS working correctly
@@ -20,50 +24,47 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ### Test Results Analysis
 
-**Mountebank Test Suite (API tests only)**: **124 passing, 128 failing (252 total) = 49.2%**
+**Mountebank Test Suite (API tests only)**: **144 passing, 108 failing (252 total) = 57.1%**
 
-**Major Failure Categories** (128 failing tests):
+**Recent Fixes** (Session ending 2026-01-16):
+- ✅ **Copy behavior** - Fixed array parsing, token replacement (6 tests fixed)
+- ✅ **Lookup behavior** - Fixed array parsing, xpath/jsonpath/CSV integration (6 tests fixed)
+- ✅ **Repeat behavior** - Fixed response cycling logic (6 tests fixed)
+- ✅ **Behavior composition** - Fixed "behaviors" vs "_behaviors" parsing (2 tests fixed)
 
-1. **Repeat behavior** (6 tests) - Not cycling responses correctly
-   - Expected first response to repeat N times before moving to second response
-   - Currently advancing to next response immediately
+**Progress**: +20 tests (from 124 to 144 passing) = **7.9% improvement**
 
-2. **Copy behavior** (6 tests) - Invalid JSON parse errors on imposter creation
-   - Tests with regex, xpath, jsonpath copy all fail with "Unable to parse body as JSON"
+**Major Remaining Failure Categories** (108 failing tests):
 
-3. **Lookup behavior** (6 tests) - Invalid JSON parse errors on imposter creation
-   - CSV file lookup tests fail with "Unable to parse body as JSON"
-
-4. **Behavior composition** (6 tests) - Invalid JSON parse errors
-   - Multiple behaviors in sequence fail to parse
-
-5. **ShellTransform** (4 tests) - **Expected failure (security block)**
+1. **ShellTransform** (6 tests) - **Expected failure (security block)**
    - Intentionally disabled for security (arbitrary command execution risk)
+   - 4 old interface composition tests + 2 new format tests with shellTransform
 
-6. **TCP injection** (~8 tests) - JavaScript injection not working in TCP context
+2. **TCP injection** (~8 tests) - JavaScript injection not working in TCP context
    - Predicate injection, response injection, state management all failing
 
-7. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
+3. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
    - Binary requests with custom resolvers failing
    - DNS error handling not working
 
-8. **HTTP proxy** (many tests) - Multiple proxy functionality gaps
+4. **HTTP proxy** (many tests) - Multiple proxy functionality gaps
    - ProxyOnce mode issues
    - ProxyAlways mode issues
    - Predicate generators not working
    - Mutual auth proxy issues
 
-9. **Response format** (multiple tests) - API response missing fields
+5. **Response format** (multiple tests) - API response missing fields
    - `savedRequests` field missing/undefined
    - `numberOfRequests` vs `recordRequests` mismatch
    - Case-sensitive headers not preserved
 
-10. **Various edge cases** (multiple tests)
-    - Gzip request handling
-    - XPath predicates
-    - Auto-assign port issues
-    - Stub overwrite operations
-    - DELETE operations with replayable bodies
+6. **Various edge cases** (remaining ~70 tests)
+   - Gzip request handling
+   - XPath predicates
+   - Auto-assign port issues
+   - Stub overwrite operations
+   - DELETE operations with replayable bodies
+   - TCP behaviors and edge cases
 
 **Won't Fix** (architectural):
 - CLI tests - Different CLI implementation
@@ -71,20 +72,21 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ## Remaining Gaps (Significant)
 
-### Status: IN PROGRESS - 49.2% compatibility
+### Status: IN PROGRESS - 57.1% compatibility
 
-With 124/252 tests passing (49.2%), go-tartuffe has significant work remaining to reach the 75%+ target. The following sections detail feature status.
+With 144/252 tests passing (57.1%), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
 
 ### Partially Working Features
 
-#### HTTP/HTTPS Behaviors - ⚠️ PARTIAL
+#### HTTP/HTTPS Behaviors - ✅ MOSTLY WORKING
 - ✅ `wait` behavior - static and dynamic latency WORKING
 - ✅ `decorate` behavior - JavaScript post-processing WORKING
-- ❌ `copy` behavior - Invalid JSON parse errors (6 tests failing)
-- ❌ `lookup` behavior - Invalid JSON parse errors (6 tests failing)
-- ❌ `repeat` behavior - Not cycling correctly (6 tests failing)
-- 🔒 `shellTransform` behavior - **DISABLED for security** (4 tests failing intentionally)
-- ❌ Behavior composition - Invalid JSON parse errors (6 tests failing)
+- ✅ `copy` behavior - Regex, xpath, jsonpath extraction WORKING
+- ✅ `lookup` behavior - CSV lookup with xpath/jsonpath WORKING
+- ✅ `repeat` behavior - Response cycling WORKING
+- 🔒 `shellTransform` behavior - **DISABLED for security** (6 tests failing intentionally)
+- ✅ Behavior composition (new format) - Multiple behaviors in sequence WORKING
+- ❌ Behavior composition (old format with shellTransform) - Expected to fail (security)
 
 #### HTTP/HTTPS Injection - ⚠️ MOSTLY WORKING
 - ✅ Basic injection working for some tests
@@ -135,26 +137,31 @@ These are architectural differences, not compatibility gaps:
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Current**: **49.2% compatibility (124/252 tests)**
+**Current**: **57.1% compatibility (144/252 tests)**
 
-go-tartuffe has substantial work remaining to achieve the 75%+ compatibility target. Current validation shows:
+go-tartuffe is making significant progress toward the 75%+ compatibility target. Current validation shows:
 
 **Test Breakdown**:
-- ✅ 124 passing - Basic features working (wait, decorate, basic stubs, HTTPS, SMTP)
-- ❌ 128 failing - Significant gaps in behaviors, TCP, proxy, and edge cases
-  - 4 failures are intentional (shellTransform security block)
-  - 124 failures need investigation and fixes
+- ✅ 144 passing - Core behaviors, stubs, protocols working (wait, decorate, copy, lookup, repeat, composition, HTTP/HTTPS/TCP/SMTP)
+- ❌ 108 failing - Remaining gaps in TCP injection/proxy, HTTP proxy, edge cases
+  - 6 failures are intentional (shellTransform security block)
+  - 102 failures need investigation and fixes
 
-**Priority Areas for Improvement**:
-1. Fix JSON parsing errors for copy/lookup/composition behaviors (18 tests)
-2. Fix repeat behavior cycling logic (6 tests)
-3. Implement TCP injection support (8+ tests)
-4. Fix TCP proxy endOfRequestResolver (5+ tests)
-5. Implement HTTP proxy modes (ProxyOnce, ProxyAlways, predicate generators)
-6. Fix API response format issues (savedRequests, numberOfRequests, case-sensitive headers)
-7. Various edge cases (gzip, xpath, stub operations)
+**Recent Progress** (2026-01-16 session):
+- Fixed copy behavior: array parsing, token replacement (6 tests)
+- Fixed lookup behavior: xpath/jsonpath with namespaces, CSV integration (6 tests)
+- Fixed repeat behavior: response cycling logic (6 tests)
+- Fixed behavior composition: "behaviors" vs "_behaviors" field handling (2 tests)
+- **Total: +20 tests (7.9% improvement)**
 
-**Security Note**: The 4 shellTransform test failures are intentional. ShellTransform allows arbitrary command execution which poses a critical security vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead.
+**Priority Areas for Remaining Work**:
+1. Implement TCP injection support (8+ tests)
+2. Fix TCP proxy endOfRequestResolver (5+ tests)
+3. Implement HTTP proxy modes (ProxyOnce, ProxyAlways, predicate generators) (many tests)
+4. Fix API response format issues (savedRequests, numberOfRequests, case-sensitive headers)
+5. Various edge cases (gzip, xpath predicates in matchers, stub operations) (~70 tests)
+
+**Security Note**: The 6 shellTransform test failures are intentional. ShellTransform allows arbitrary command execution which poses a critical security vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead.
 
 ## Validation Workflow
 
@@ -186,8 +193,8 @@ pkill -f tartuffe 2>/dev/null || true
 
 # API-level integration tests (primary validation)
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Current: 124 passing, 128 failing (252 total) = 49.2%
-# Target: 75%+ passing - NOT YET ACHIEVED
+# Current: 144 passing, 108 failing (252 total) = 57.1%
+# Target: 75%+ passing - MAKING PROGRESS
 
 # JavaScript client tests (secondary validation)
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
