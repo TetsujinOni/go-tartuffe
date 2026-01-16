@@ -5,124 +5,155 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working
-**Overall Progress**: 73% compatibility (171/235 passing, 64 failing)
+**Overall Progress**: 26% compatibility (46/175 passing, 129 failing)
 **Last Updated**: 2026-01-16
 
-### Test Suite Summary
+**Recent Fixes**:
+- ✅ Content-Type handling for text/plain responses (commit fc977b8)
+- ✅ Test harness pidfile exit handling (commit 8be1a34)
+- ✅ HTTP stub predicates (deepEquals, exists, AND logic) - already implemented
+- ✅ HTTP stub CRUD operations - already implemented
 
-| Test Suite | Passing | Failing | Pass Rate | Status |
-|------------|---------|---------|-----------|---------|
-| **HTTP Behaviors** | 50 | 0 | 100% | ✅ Complete |
-| **HTTP Injection** | 28 | 0 | 100% | ✅ Complete |
-| **HTTP Metrics** | 3 | 0 | 100% | ✅ Complete |
-| **SMTP** | 2 | 0 | 100% | ✅ Complete |
-| **TCP** | 29 | 5 | 85% | 🔄 Mostly complete |
-| **Imposters Controller** | 7 | 3 | 70% | 🔄 Good coverage |
-| **HTTP Fault** | 4 | 2 | 67% | 🔄 Good coverage |
-| **HTTPS** | 2 | 2 | 50% | 🔄 Core features work |
-| **HTTP Imposter** | 12 | 16 | 43% | ⚠️ Needs work |
-| **HTTP Stub** | 8 | 46 | 15% | ⚠️ Needs significant work |
-| **CLI** | 0 | 17 | 0% | ❌ Won't fix |
-| **Total** | **171** | **64** | **73%** | **64 remaining issues** |
+### Test Results Analysis
+
+**Mountebank Test Suite (API tests only)**: 46 passing, 129 failing (175 total)
+
+**Major Failure Areas**:
+- HTTP/HTTPS Behaviors (~48 failures) - wait, decorate, repeat, shellTransform, copy, lookup
+- HTTP/HTTPS Injection (~24 failures) - predicate injection, response injection, state
+- HTTP/HTTPS Proxy (~10 failures) - proxy forwarding, proxy configuration
+- HTTP/HTTPS Stub/Imposter (~30+ failures) - CORS, auto-assign port, headers, request recording
+- TCP (~10+ failures) - proxy, injection, various edge cases
+- Controller operations (~7 failures) - DELETE/PUT response formats
+
+**Working Features** (46 passing tests):
+- ✅ Basic imposter creation/deletion (POST/DELETE /imposters)
+- ✅ Metrics endpoint (3 tests)
+- ✅ HTTP fault injection (CONNECTION_RESET_BY_PEER, RANDOM_DATA_THEN_CLOSE)
+- ✅ HTTPS with default certs and mutual auth
+- ✅ Content-Type default handling for JSON
+- ✅ Basic stub matching
+- ✅ Controller PUT /imposters (overwrite all)
+- ✅ Basic GET /imposters/:id operations
+- ✅ 404 handling for non-existent imposters
 
 ## Remaining Gaps
 
 ### Critical Priority (P0)
 
-#### HTTP Stub Issues (~46 failing tests)
-**Impact**: High - core stub matching and response features
+#### HTTP/HTTPS Behaviors (~48 failing tests)
+**Impact**: High - advanced response transformation features
 
-**Known Issues**:
-- Content-Type handling for non-JSON responses (many test failures)
-- Complex predicate matching:
-  - deepEquals with nested structures (4 tests)
-  - exists operator (2 tests)
-  - Multiple predicates with AND logic (3 tests)
-- XPath extraction in predicates (2 tests)
-- Null value handling (2 tests)
-- Gzip request handling (1 test)
-- Stub CRUD operations:
-  - Overwriting single stub (1 test)
-  - Deleting single stub (1 test)
-  - Adding single stub (2 tests)
-  - Validation errors for bad stub data (1 test)
+**Missing Features**:
+- `wait` behavior - add latency to responses (4 tests)
+- `wait` as function - dynamic latency (2 tests)
+- `decorate` behavior - post-process responses with JavaScript (8 tests)
+- `repeat` behavior - loop through response array (3 tests)
+- `shellTransform` behavior - transform via shell command (2 tests)
+- `copy` behavior - copy from request to response (6 tests: regex, xpath, jsonpath)
+- `lookup` behavior - lookup from CSV file (6 tests)
+- Behavior composition - multiple behaviors in sequence (3 tests)
 
-**Files to investigate**:
-- `internal/imposter/http.go` - Content-Type response handling
-- `internal/imposter/predicates.go` - Predicate evaluation logic
-- `internal/api/handlers/stubs.go` - Stub CRUD operations
+**Files to check**:
+- `internal/imposter/behaviors.go` - Behavior implementations
+- `internal/models/stub.go` - Behavior model definitions
+
+**Estimated effort**: 3-4 days
+
+#### HTTP/HTTPS Injection (~24 failing tests)
+**Impact**: High - dynamic request/response logic
+
+**Missing Features**:
+- Predicate injection - JavaScript predicates for matching (4 tests)
+- Response injection - JavaScript response generation (4 tests)
+- State management in injection - persist state across requests (6 tests)
+- `process.env` access in injection (2 tests - may be won't fix)
+- Async injection support (2 tests - may be won't fix)
+
+**Files to check**:
+- `internal/imposter/inject.go` - JavaScript injection execution
+- Go tests show injection works but mbTest failures suggest compatibility issues
 
 **Estimated effort**: 2-3 days
 
 ### High Priority (P1)
 
-#### HTTP Imposter Issues (~16 failing tests)
-**Impact**: Medium - imposter management features
+#### HTTP/HTTPS Proxy (~10 failing tests)
+**Impact**: Medium - proxy/record/replay functionality
+
+**Missing Features**:
+- Basic proxy forwarding to origin (2 tests)
+- Proxy to HTTPS origins (1 test)
+- Proxy headers and request information (2 tests)
+- ProxyOnce with recording (implied by failures)
+- Invalid domain handling (1 test)
+- Mutual auth proxying (1 test)
+
+**Files to check**:
+- `internal/imposter/proxy.go` - HTTP proxy implementation exists
+- May need integration with HTTP server request handling
+
+**Estimated effort**: 2-3 days
+
+#### HTTP/HTTPS Stub/Imposter Issues (~30+ failing tests)
+**Impact**: Medium - HTTP-specific features
 
 **Known Issues**:
-- Auto-assign port functionality (when port not provided) (2 tests)
-- DELETE /imposters response format:
-  - Missing recordRequests field (1 test)
-  - Missing requests array (1 test)
-  - Replayable format edge cases (1 test)
-- GET /imposters response format differences (2 tests)
+- CORS support (8 tests - preflight, headers, etc.)
+- Auto-assign port when not provided (2 tests)
+- Case-sensitive header handling (2 tests)
+- Request recording and numberOfRequests (2 tests)
+- DELETE /imposters response format - replayable body with proxies (2 tests)
+- DELETE /imposters/:id/savedRequests (2 tests)
+- Various stub matching edge cases
 
 **Files to investigate**:
-- `internal/api/handlers/imposters.go` - Port assignment, DELETE response
-- `internal/api/handlers/imposter.go` - GET imposter response format
+- `internal/imposter/http_server.go` - CORS, headers, request recording
+- `internal/api/handlers/imposters.go` - Auto-port, DELETE responses
 
-**Estimated effort**: 1-2 days
+**Estimated effort**: 2-3 days
 
-#### Imposters Controller Issues (~3 failing tests)
-**Impact**: Medium - API consistency
+#### Controller Operations (~7 failing tests)
+**Impact**: Medium - API response formats
 
 **Known Issues**:
-- Response format differences in controller operations
-- Missing fields in certain response scenarios
+- DELETE /imposters - replayable body format (2 tests)
+- PUT /imposters - response format differences (1 test)
+- GET /imposters - format differences (implied)
 
 **Files to investigate**:
-- `internal/api/handlers/imposters.go` - Controller response formatting
+- `internal/api/handlers/imposters.go` - Response serialization
 
-**Estimated effort**: 0.5-1 day
+**Estimated effort**: 1 day
 
 ### Medium Priority (P2)
 
-#### TCP Remaining Issues (~5 failing tests)
-**Impact**: Low - edge cases, TCP mostly works
+#### TCP Issues (~10+ failing tests)
+**Impact**: Low-Medium - TCP proxy and injection
+
+**Missing Features**:
+- TCP proxy forwarding (6 tests)
+- TCP injection in predicates and responses (multiple tests)
+- TCP request recording edge cases
+- Port conflict handling
+
+**Files to check**:
+- `internal/imposter/tcp_server.go` - Proxy and injection integration
+- `internal/imposter/tcp_proxy_test.go` - Go tests exist and pass
+- `internal/imposter/tcp_injection_test.go` - Go tests exist and pass
+
+**Note**: Go tests for TCP proxy and injection pass, but mbTest failures suggest compatibility or integration issues
+
+**Estimated effort**: 1-2 days
+
+#### HTTP Fault (~1 failing test)
+**Impact**: Low - edge case
 
 **Known Issues**:
-- Binary mode with `matches` predicate - should return 400 error (1 test)
-- Request recording format differences (2 tests)
-- Proxy edge cases with port conflicts (2 tests)
+- Undefined fault behavior (should do nothing)
 
-**Files to investigate**:
-- `internal/imposter/tcp_server.go` - Predicate validation, request recording
-- `internal/imposter/predicates.go` - Binary mode validation
-
-**Estimated effort**: 0.5-1 day
-
-#### HTTPS Proxy Issues (~2 failing tests)
-**Impact**: Low - specific proxy scenarios
-
-**Known Issues**:
-- Proxy to HTTPS origins with mutual auth (1 test)
-- Certificate field persistence in API responses (1 test)
-
-**Files to investigate**:
-- `internal/imposter/proxy.go` - HTTPS proxy handling
-- `internal/api/handlers/imposter.go` - Certificate field serialization
-
-**Estimated effort**: 0.5 day
-
-#### HTTP Fault Injection (~2 failing tests)
-**Impact**: Low - advanced fault scenarios
-
-**Known Issues**:
-- Specific fault timing scenarios
-- Connection handling edge cases
-
-**Files to investigate**:
-- `internal/imposter/http.go` - Fault injection implementation
+**Files to check**:
+- `internal/imposter/http_server.go` - Fault handling
 
 **Estimated effort**: 0.5 day
 
@@ -145,15 +176,34 @@ These are architectural differences, not bugs:
 
 ## Next Steps
 
-Based on impact and effort, recommended order:
+Based on impact and effort, recommended implementation order:
 
-1. **HTTP Stub Content-Type** (P0) - Quick win, fixes many tests
-2. **HTTP Stub Predicates** (P0) - deepEquals, exists, AND logic
-3. **HTTP Imposter Auto-assign Port** (P1) - Important feature
-4. **HTTP Stub CRUD Operations** (P0) - API completeness
-5. **Imposters Controller Fixes** (P1) - API consistency
-6. **TCP Binary Mode Validation** (P2) - Edge case fix
-7. **HTTPS Proxy** (P2) - Low priority, works for most cases
+1. **HTTP Behaviors** (P0) - Most impactful, ~48 test fixes
+   - Start with `wait` and `decorate` (most commonly used)
+   - Then `copy`, `lookup`, `repeat`
+   - Finally `shellTransform` and composition
+
+2. **HTTP Injection** (P0) - Dynamic behavior, ~24 test fixes
+   - Predicate injection
+   - Response injection
+   - State management compatibility
+
+3. **HTTP Proxy** (P1) - Recording/replay, ~10 test fixes
+   - Basic proxy forwarding
+   - ProxyOnce mode
+   - HTTPS proxy support
+
+4. **HTTP Stub/Imposter Features** (P1) - ~30 test fixes
+   - CORS support (8 tests)
+   - Auto-assign port (2 tests)
+   - Request recording improvements
+   - DELETE response formats
+
+5. **TCP Integration** (P2) - ~10 test fixes
+   - Connect Go test implementations to mbTest scenarios
+   - Investigate compatibility gaps
+
+**Total Estimated Effort**: 12-18 days to reach ~75%+ compatibility
 
 ## Validation Workflow
 
@@ -163,8 +213,8 @@ Based on impact and effort, recommended order:
 cd /home/tetsujinoni/work/mountebank
 npm run test:api
 
-# Current results: 66 passing, 186 failing
-# Target: Reduce failures to ~20 (Node.js + CLI + Web UI)
+# Current results: 46 passing, 129 failing (175 total)
+# Target: 130+ passing (~75% compatibility)
 ```
 
 ### Running Go Tests
