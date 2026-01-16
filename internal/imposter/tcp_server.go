@@ -410,10 +410,10 @@ func NewTCPMatcher(imp *models.Imposter) *TCPMatcher {
 
 // TCPMatchResult contains the result of matching a TCP request
 type TCPMatchResult struct {
-	Response     *models.IsResponse
-	RawResponse  *models.Response // For accessing Inject field
-	Stub         *models.Stub
-	StubIndex    int
+	Response    *models.IsResponse
+	RawResponse *models.Response // For accessing Inject field
+	Stub        *models.Stub
+	StubIndex   int
 }
 
 // Match finds a matching stub for the given TCP data

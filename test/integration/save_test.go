@@ -190,12 +190,13 @@ func TestSave_Replayable(t *testing.T) {
 		Method: "GET",
 	}
 
+	numRequests := 1
 	imposter := models.Imposter{
 		Port:             4553,
 		Protocol:         "http",
 		Name:             "replayable test",
 		Requests:         []models.Request{request},
-		NumberOfRequests: 1,
+		NumberOfRequests: &numRequests,
 		Stubs: []models.Stub{
 			{
 				Responses: []models.Response{
@@ -229,8 +230,8 @@ func TestSave_Replayable(t *testing.T) {
 		t.Errorf("expected no requests in replayable mode, got %d", len(saved.Imposters[0].Requests))
 	}
 
-	if saved.Imposters[0].NumberOfRequests != 0 {
-		t.Errorf("expected numberOfRequests to be 0 in replayable mode, got %d", saved.Imposters[0].NumberOfRequests)
+	if saved.Imposters[0].NumberOfRequests != nil {
+		t.Errorf("expected numberOfRequests to be nil in replayable mode, got %d", *saved.Imposters[0].NumberOfRequests)
 	}
 }
 

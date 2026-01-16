@@ -51,7 +51,7 @@ func TestDecorateBasic(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -123,7 +123,7 @@ func TestDecorateWithRequestAccess(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method:  tt.requestMethod,
@@ -186,7 +186,7 @@ func TestDecorateReturnValue(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -323,7 +323,7 @@ func TestDecorateErrorHandling(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",

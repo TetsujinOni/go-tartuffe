@@ -54,7 +54,7 @@ func TestCopyWithRegex(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -133,7 +133,7 @@ func TestCopyWithJSONPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			jsEngine := NewJSEngine()
-		executor := NewBehaviorExecutor(jsEngine)
+			executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "POST",

@@ -5,7 +5,7 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working (with MB_EXECUTABLE correctly set)
-**Overall Progress**: **55.0% compatibility (138/251 API tests passing, 113 failing)**
+**Overall Progress**: **55.0% raw (138/251 tests) | 57.3% adjusted (138/241 excluding security blocks)**
 **Last Updated**: 2026-01-16 (After TCP injection, behaviors, and response format fixes)
 
 **Known Working**:
@@ -24,10 +24,13 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 - ✅ **Response format** - recordRequests and numberOfRequests fields correct
 - ✅ Test harness integration - MB_EXECUTABLE workflow established
 - 🔒 **ShellTransform disabled** (commit b44905a) - Security fix for command injection vulnerability
+- 🔒 **Process object disabled** - Security sandbox prevents access to `process.env` and system information
 
 ### Test Results Analysis
 
-**Mountebank Test Suite (API tests only)**: **138 passing, 113 failing (251 total) = 55.0%**
+**Mountebank Test Suite (API tests only)**: **138 passing, 113 failing (251 total)**
+- Raw: 55.0% (138/251)
+- Adjusted: 57.3% (138/241 excluding ~10 security-blocked tests)
 
 **Recent Fixes** (2026-01-16):
 - ✅ **TCP injection** - Fixed by passing requestData via VM.Set (commit 631a9cc)
@@ -40,46 +43,49 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
    - Intentionally disabled for security (arbitrary command execution risk)
    - Composition tests involving shellTransform will fail
 
-2. **JavaScript Injection** (~20 tests) - State management and process access
+2. **Process object access** (~4 tests) - **Expected failure (security block)**
+   - `process.env` and system information access blocked in JavaScript sandbox
+   - Prevents information disclosure and environment variable leakage
+
+3. **JavaScript Injection** (~16 tests) - State management and async issues
    - State sharing between predicate/response injection failing
-   - `process` object access not supported (security sandbox)
    - Asynchronous injection issues
 
-3. **HTTP Proxy** (~20 tests) - Multiple proxy functionality gaps
+4. **HTTP Proxy** (~20 tests) - Multiple proxy functionality gaps
    - ProxyOnce/ProxyAlways mode issues
    - Predicate generators not working
    - Decorated proxy responses failing
    - Binary data from origin server issues
 
-4. **TCP Protocol** (~15 tests) - Various TCP-specific issues
+5. **TCP Protocol** (~15 tests) - Various TCP-specific issues
    - endOfRequestResolver edge cases
    - DNS error handling
    - Packet splitting behavior
    - Binary mode predicates
 
-5. **CORS** (~6 tests) - Preflight request handling
+6. **CORS** (~6 tests) - Preflight request handling
    - allowCORS option not fully working
    - Preflight requests returning wrong status
 
-6. **Faults** (~6 tests) - Connection fault injection
+7. **Faults** (~6 tests) - Connection fault injection
    - CONNECTION_RESET_BY_PEER not implemented
    - RANDOM_DATA_THEN_CLOSE not implemented
 
-7. **JSON/Predicates** (~15 tests) - Complex predicate matching
+8. **JSON/Predicates** (~15 tests) - Complex predicate matching
    - deepEquals object handling
    - JSON body parsing issues
    - xpath array predicates
    - gzip request handling
 
-8. **API/Controller** (~10 tests) - Various API issues
+9. **API/Controller** (~10 tests) - Various API issues
    - Auto-assign port not working
    - Stub overwrite operations
    - Metrics endpoint issues
    - Case-sensitive headers
 
-9. **HTTPS** (~5 tests) - Certificate handling
-   - Key/cert pair during creation
-   - Mutual auth proxying
+10. **HTTPS** (~5 tests) - Certificate handling
+    - Key/cert pair during creation
+    - Mutual auth proxying
 
 **Won't Fix** (architectural):
 - CLI tests - Different CLI implementation
@@ -87,9 +93,9 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ## Remaining Gaps (Significant)
 
-### Status: IN PROGRESS - 55.0% compatibility
+### Status: IN PROGRESS - 57.3% adjusted compatibility
 
-With 138/251 tests passing (55.0%), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
+With 138/241 actionable tests passing (57.3% adjusted, excluding security blocks), go-tartuffe is making progress toward the 75%+ target. The following sections detail feature status.
 
 ### Partially Working Features
 
@@ -108,7 +114,7 @@ With 138/251 tests passing (55.0%), go-tartuffe is making progress toward the 75
 - ✅ Basic synchronous injection working
 - ❌ State management between requests failing (~8 tests)
 - ❌ Asynchronous injection not working (~4 tests)
-- ❌ `process` object access blocked (security sandbox)
+- 🔒 `process` object access **DISABLED for security** (~4 tests failing intentionally)
 
 #### HTTP/HTTPS Proxy - ❌ NEEDS WORK (~20 tests)
 - ❌ ProxyOnce mode - recording/replay issues
@@ -171,28 +177,29 @@ These are architectural differences, not compatibility gaps:
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Current**: **55.0% compatibility (138/251 tests)**
+**Current**: **57.3% adjusted (138/241 actionable tests) | 55.0% raw (138/251 total)**
 
 go-tartuffe is making progress toward the 75%+ compatibility target. Current validation shows:
 
 **Test Breakdown**:
 - ✅ 138 passing - Core behaviors, stubs, protocols working
 - ❌ 113 failing - Remaining gaps across multiple categories
-  - ~6 failures are intentional (shellTransform security block)
-  - ~107 failures need investigation and fixes
+  - ~10 failures are intentional (security blocks: shellTransform ~6, process object ~4)
+  - ~103 failures need investigation and fixes
 
 **Failure Category Summary** (113 tests):
 | Category | Est. Tests | Priority |
 |----------|-----------|----------|
 | HTTP Proxy | ~20 | High |
-| JavaScript Injection (state/async) | ~20 | Medium |
+| JavaScript Injection (state/async) | ~16 | Medium |
 | TCP Protocol (edge cases) | ~15 | Medium |
 | JSON/Predicates | ~15 | Medium |
 | API/Controller | ~10 | Low |
-| ShellTransform | ~6 | Won't Fix |
+| ShellTransform | ~6 | Won't Fix (security) |
 | CORS | ~6 | Low |
 | Faults | ~6 | Low |
 | HTTPS | ~5 | Low |
+| Process object access | ~4 | Won't Fix (security) |
 
 **Recent Progress** (2026-01-16):
 - ✅ TCP injection: VM.Set fix for Buffer support (commit 631a9cc)
@@ -201,11 +208,13 @@ go-tartuffe is making progress toward the 75%+ compatibility target. Current val
 
 **Priority Areas for Next Session**:
 1. **HTTP Proxy** (~20 tests) - ProxyOnce/ProxyAlways modes, predicate generators
-2. **JavaScript Injection** (~20 tests) - State persistence, async support
+2. **JavaScript Injection** (~16 tests) - State persistence, async support
 3. **JSON/Predicates** (~15 tests) - deepEquals, JSON body parsing, gzip
 4. **CORS** (~6 tests) - allowCORS option, preflight handling
 
-**Security Note**: The ~6 shellTransform test failures are intentional. ShellTransform allows arbitrary command execution which poses a critical security vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead.
+**Security Note**: The ~10 security-related test failures are intentional:
+- **ShellTransform (~6 tests)**: Allows arbitrary command execution - critical vulnerability. Use `decorate` behavior with sandboxed JavaScript instead.
+- **Process object (~4 tests)**: Exposes `process.env` and system information - information disclosure risk. Environment-specific logic should be handled outside the mock server.
 
 ## Validation Workflow
 

@@ -80,8 +80,12 @@ func TestHTTPMetricsRequestCount(t *testing.T) {
 			}
 
 			imposter := server.GetImposter()
-			if imposter.NumberOfRequests != tt.wantNumRequests {
-				t.Errorf("NumberOfRequests = %d, want %d", imposter.NumberOfRequests, tt.wantNumRequests)
+			if imposter.NumberOfRequests == nil || *imposter.NumberOfRequests != tt.wantNumRequests {
+				got := 0
+				if imposter.NumberOfRequests != nil {
+					got = *imposter.NumberOfRequests
+				}
+				t.Errorf("NumberOfRequests = %d, want %d", got, tt.wantNumRequests)
 			}
 		})
 	}
@@ -132,8 +136,12 @@ func TestHTTPMetricsWithoutRecordRequests(t *testing.T) {
 	}
 
 	imposter := server.GetImposter()
-	if imposter.NumberOfRequests != 3 {
-		t.Errorf("NumberOfRequests = %d, want 3 (should track even without recordRequests)", imposter.NumberOfRequests)
+	if imposter.NumberOfRequests == nil || *imposter.NumberOfRequests != 3 {
+		got := 0
+		if imposter.NumberOfRequests != nil {
+			got = *imposter.NumberOfRequests
+		}
+		t.Errorf("NumberOfRequests = %d, want 3 (should track even without recordRequests)", got)
 	}
 
 	// Verify requests array is empty (since recordRequests=false)
@@ -198,8 +206,12 @@ func TestHTTPMetricsResponseTime(t *testing.T) {
 	// Verify request was counted
 	server := manager.GetServer(port)
 	imposter := server.GetImposter()
-	if imposter.NumberOfRequests != 1 {
-		t.Errorf("NumberOfRequests = %d, want 1", imposter.NumberOfRequests)
+	if imposter.NumberOfRequests == nil || *imposter.NumberOfRequests != 1 {
+		got := 0
+		if imposter.NumberOfRequests != nil {
+			got = *imposter.NumberOfRequests
+		}
+		t.Errorf("NumberOfRequests = %d, want 1", got)
 	}
 }
 
