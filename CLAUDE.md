@@ -7,7 +7,7 @@ This document contains workflow hints, validation procedures, and development gu
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
 - **Compatibility Target**: 75%+ with mountebank test suite
-- **Current Status**: **98.4% (248/253 tests passing, 4 shellTransform blocked)** 🎉
+- **Current Status**: **49.2% (124/252 tests passing, 128 failing)**
 
 ## Validation Workflow
 
@@ -34,8 +34,8 @@ The mountebank test suite validates compatibility with the original mountebank b
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (**248 passing, 4 failing, 1 skipped - 98.4%!**)
-  - 4 failures are intentional: shellTransform disabled for security
+- **test:api** - API-level integration tests (**124 passing, 128 failing - 49.2%**)
+  - Major gaps: repeat behavior, copy/lookup behaviors, TCP injection/proxy, HTTP proxy
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -60,7 +60,7 @@ go test ./internal/... ./cmd/...
 # 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Expected: 248 passing, 4 failing (shellTransform), 1 skipped (253 total)
+# Current: 124 passing, 128 failing (252 total) = 49.2%
 
 # 5. Run mountebank JavaScript tests against go-tartuffe
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
@@ -72,10 +72,17 @@ pkill -f tartuffe || true
 
 #### Quick Validation (API tests only)
 
+**Note:** Run this synchronously (not in background) to see results immediately.
+
 ```bash
 cd /home/tetsujinoni/work/mountebank
 pkill -f tartuffe 2>/dev/null || true
-MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api 2>&1 | tee /tmp/tartuffe-validation.log
+```
+
+To check just the summary:
+```bash
+grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 ```
 
 #### Validation Notes
@@ -89,18 +96,22 @@ MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run
 
 #### Test Results Interpretation
 
-**Current baseline (as of 2026-01-16 final validation):**
-- **test:api**: **248 passing, 4 failing, 1 skipped (253 total) = 98.4%** ✅
-- **test:js**: **3 passing, 0 failing = 100%** ✅
-- **Target**: 75%+ passing - **EXCEEDED!**
+**Current baseline (as of 2026-01-16 validation):**
+- **test:api**: **124 passing, 128 failing (252 total) = 49.2%**
+- **test:js**: Not yet tested
+- **Target**: 75%+ passing - **NOT YET ACHIEVED**
 
-**Expected failures (4 tests)**:
-- `should support shell transform without array for backwards compatibility` (HTTP)
-- `should support shell transform without array for backwards compatibility` (HTTPS)
-- `should support array of shell transforms in order` (HTTP)
-- `should support array of shell transforms in order` (HTTPS)
-
-These failures are **intentional** - shellTransform is disabled for security (arbitrary command execution risk). See [docs/SECURITY.md](../docs/SECURITY.md) for details.
+**Major failure categories**:
+1. **Repeat behavior** (6 tests) - Not cycling responses correctly
+2. **shellTransform** (4 tests) - Expected failure (security block)
+3. **Copy behavior** (6 tests) - Invalid JSON parse errors
+4. **Lookup behavior** (6 tests) - Invalid JSON parse errors
+5. **Behavior composition** (6 tests) - Invalid JSON parse errors
+6. **TCP injection** (~8 tests) - Injection not working in TCP context
+7. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
+8. **HTTP proxy** (many tests) - Various proxy functionality gaps
+9. **Response format** (multiple) - Missing fields (savedRequests, numberOfRequests vs recordRequests)
+10. **Various edge cases** - Case-sensitive headers, gzip support, xpath predicates, etc.
 
 ### Running Go Tests
 
@@ -461,42 +472,36 @@ go build -o bin/tartuffe ./cmd/tartuffe
 
 ## Achievement Status
 
-### Compatibility Target: EXCEEDED! ✅
+### Compatibility Target: NOT YET ACHIEVED
 
 **Target**: 75%+ compatibility
-**Achieved**: **98.4% (248/253 tests passing)**
+**Current**: **49.2% (124/252 tests passing)**
 
-All major features are complete:
+### Feature Status
 
+**Working features**:
 - ✅ Wait behavior - static and dynamic latency
-- ✅ Decorate behavior - JavaScript post-processing (secure alternative to shellTransform)
-- ✅ Copy behavior - regex, xpath, JSONPath extraction
-- ✅ Lookup behavior - CSV file lookups
-- ✅ Repeat behavior - cyclic response repetition
-- 🔒 ShellTransform - **DISABLED for security** (4 tests intentionally fail)
-- ✅ HTTP/HTTPS injection - predicates, responses, state
-- ✅ TCP injection - predicates, responses, async
-- ✅ HTTP/HTTPS proxy - all modes (ProxyOnce, ProxyAlways, etc.)
-- ✅ TCP proxy - forwarding, binary data
-- ✅ CORS support - preflight, headers
-- ✅ Metrics - Prometheus-compatible
-- ✅ All fault types - connection reset, random data
+- ✅ Decorate behavior - JavaScript post-processing
+- ✅ HTTP/HTTPS basic stubs - is responses, basic predicates
+- ✅ TCP basic stubs - basic forwarding and responses
+- ✅ HTTPS with mutual authentication
 - ✅ SMTP - basic functionality
-- ✅ Mutual authentication - HTTPS mTLS
+- 🔒 ShellTransform - **DISABLED for security** (4 tests intentionally fail)
 
-### ShellTransform Security Decision:
+**Features with gaps**:
+- ❌ Repeat behavior - Not cycling responses correctly (6 tests failing)
+- ❌ Copy behavior - Invalid JSON parsing (6 tests failing)
+- ❌ Lookup behavior - Invalid JSON parsing (6 tests failing)
+- ❌ Behavior composition - Invalid JSON parsing (6 tests failing)
+- ❌ TCP injection - Not implemented (8+ tests failing)
+- ❌ TCP proxy - endOfRequestResolver issues (5+ tests failing)
+- ❌ HTTP proxy - Multiple gaps (many tests failing)
+- ❌ Response format - Missing API fields (savedRequests, numberOfRequests)
+- ❌ Various edge cases - gzip, xpath, case-sensitive headers
 
-**Status**: ✅ Investigation complete - Mystery solved!
+### ShellTransform Security Note:
 
-The initial validation showing "252 passing" used an **outdated binary** built before the security fix. After rebuilding with the current code (commit b44905a), shellTransform correctly fails with:
-
-```
-behavior error: shellTransform behavior is not supported (security risk)
-```
-
-**Why disabled**: ShellTransform allows arbitrary command execution, creating a critical command injection vulnerability.
-
-**Migration**: Users should use the `decorate` behavior with sandboxed JavaScript instead. See [docs/SECURITY.md](../docs/SECURITY.md) for examples.
+ShellTransform is intentionally disabled (4 tests fail) as it allows arbitrary command execution, creating a critical command injection vulnerability. Users should use the `decorate` behavior with sandboxed JavaScript instead. See [docs/SECURITY.md](../docs/SECURITY.md).
 
 ## Additional Resources
 
@@ -523,7 +528,7 @@ When resuming work:
 
 ---
 
-**Last Updated**: 2026-01-16 (Final - ShellTransform investigation complete)
-**Current Compatibility**: **98.4% (248/253 passing, 4 shellTransform blocked)** 🎉
+**Last Updated**: 2026-01-16 (Accurate validation completed)
+**Current Compatibility**: **49.2% (124/252 passing, 128 failing)**
 **Branch**: feat/missing-backlog
-**Status**: Feature parity achieved (excluding security-blocked shellTransform)
+**Status**: Significant work remaining to achieve 75%+ target
