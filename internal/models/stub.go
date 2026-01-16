@@ -75,13 +75,27 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 	}
 
 	// Handle _behaviors: convert object format to array format
+	// Also extract repeat value if present in behaviors
 	if behaviorsRaw, ok := raw["_behaviors"]; ok {
 		switch v := behaviorsRaw.(type) {
 		case map[string]interface{}:
-			// Single behavior as object - convert to array
+			// Single behavior as object
+			// Extract repeat if present and promote to response level
+			if repeatVal, hasRepeat := v["repeat"]; hasRepeat {
+				raw["repeat"] = repeatVal
+			}
+			// Convert to array
 			raw["_behaviors"] = []interface{}{v}
 		case []interface{}:
-			// Already an array, leave as is
+			// Already an array
+			// Extract repeat from first behavior if present
+			if len(v) > 0 {
+				if behaviorMap, ok := v[0].(map[string]interface{}); ok {
+					if repeatVal, hasRepeat := behaviorMap["repeat"]; hasRepeat {
+						raw["repeat"] = repeatVal
+					}
+				}
+			}
 		}
 	}
 
