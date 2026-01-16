@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,7 +60,13 @@ func doRequest(method, path string, body interface{}) (*http.Response, map[strin
 		bodyReader = bytes.NewReader(jsonBody)
 	}
 
-	req, err := http.NewRequest(method, baseURL+path, bodyReader)
+	// If path is already an absolute URL, use it as-is, otherwise prepend baseURL
+	url := path
+	if !strings.HasPrefix(path, "http://") && !strings.HasPrefix(path, "https://") {
+		url = baseURL + path
+	}
+
+	req, err := http.NewRequest(method, url, bodyReader)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,18 +341,18 @@ func TestHome_ReturnsHypermediaLinks(t *testing.T) {
 	links := body["_links"].(map[string]interface{})
 
 	impostersLink := links["imposters"].(map[string]interface{})["href"].(string)
-	if impostersLink != "/imposters" {
-		t.Errorf("expected /imposters, got %s", impostersLink)
+	if impostersLink != "http://localhost:2525/imposters" {
+		t.Errorf("expected http://localhost:2525/imposters, got %s", impostersLink)
 	}
 
 	configLink := links["config"].(map[string]interface{})["href"].(string)
-	if configLink != "/config" {
-		t.Errorf("expected /config, got %s", configLink)
+	if configLink != "http://localhost:2525/config" {
+		t.Errorf("expected http://localhost:2525/config, got %s", configLink)
 	}
 
 	logsLink := links["logs"].(map[string]interface{})["href"].(string)
-	if logsLink != "/logs" {
-		t.Errorf("expected /logs, got %s", logsLink)
+	if logsLink != "http://localhost:2525/logs" {
+		t.Errorf("expected http://localhost:2525/logs, got %s", logsLink)
 	}
 }
 

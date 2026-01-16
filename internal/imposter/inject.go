@@ -288,3 +288,92 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string
 
 	return result.ToBoolean(), nil
 }
+
+// ExecuteTCPPredicate executes an inject predicate script for TCP protocol
+func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool, error) {
+	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+
+	jsLogger := NewJSLogger("inject:tcp-predicate")
+
+	// Set up the request object (TCP has simpler structure)
+	reqObj := map[string]interface{}{
+		"data": requestData,
+	}
+
+	vm.Set("request", reqObj)
+	vm.Set("logger", jsLogger.createLoggerObject())
+
+	// Wrap the script in a function call
+	wrappedScript := fmt.Sprintf(`
+		(function() {
+			var fn = %s;
+			return fn(request, logger);
+		})()
+	`, script)
+
+	result, err := vm.RunString(wrappedScript)
+	if err != nil {
+		// Include preview of request data for debugging
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return false, formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	return result.ToBoolean(), nil
+}
+
+// ExecuteTCPResponse executes an inject script for TCP response
+func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state map[string]interface{}) (string, error) {
+	vm := goja.New()
+	new(require.Registry).Enable(vm)
+	buffer.Enable(vm)
+	console.Enable(vm)
+	jsLogger := NewJSLogger("inject:tcp-response")
+
+	// Set up the request object
+	reqObj := map[string]interface{}{
+		"data": requestData,
+	}
+
+	// Ensure state is not nil
+	if state == nil {
+		state = make(map[string]interface{})
+	}
+
+	vm.Set("request", reqObj)
+	vm.Set("state", state)
+	vm.Set("logger", jsLogger.createLoggerObject())
+
+	// Wrap the script in a function call
+	wrappedScript := fmt.Sprintf(`
+		(function() {
+			var fn = %s;
+			return fn(request, state, logger);
+		})()
+	`, script)
+
+	result, err := vm.RunString(wrappedScript)
+	if err != nil {
+		// Include preview of request data for debugging
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return "", formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	// Extract the data field from the returned object
+	exported := result.Export()
+	if respMap, ok := exported.(map[string]interface{}); ok {
+		if data, ok := respMap["data"]; ok {
+			return fmt.Sprintf("%v", data), nil
+		}
+	}
+
+	// If not an object with data field, convert directly to string
+	return fmt.Sprintf("%v", exported), nil
+}

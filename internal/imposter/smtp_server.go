@@ -307,6 +307,13 @@ func (s *SMTPServer) parseEmail(clientAddr, mailFrom string, rcptTo []string, da
 		EnvelopeFrom: mailFrom,
 		EnvelopeTo:   rcptTo,
 		Priority:     "normal",
+		// Initialize empty arrays (mountebank expects [], not null)
+		To:          []models.EmailAddress{},
+		Cc:          []models.EmailAddress{},
+		Bcc:         []models.EmailAddress{},
+		References:  []string{},
+		InReplyTo:   []string{},
+		Attachments: []models.SMTPAttachment{},
 	}
 
 	// Parse headers and body

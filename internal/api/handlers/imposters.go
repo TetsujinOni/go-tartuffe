@@ -42,7 +42,7 @@ func (h *ImpostersHandler) GetImposters(w http.ResponseWriter, r *http.Request) 
 	// Apply options to each imposter
 	result := make([]*models.Imposter, len(imposters))
 	for i, imp := range imposters {
-		result[i] = applyOptions(imp, options)
+		result[i] = applyOptionsWithRequest(imp, options, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -52,7 +52,7 @@ func (h *ImpostersHandler) GetImposters(w http.ResponseWriter, r *http.Request) 
 func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request) {
 	var imp models.Imposter
 	if err := json.NewDecoder(r.Body).Decode(&imp); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -115,10 +115,11 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 	}
 
 	// Add location header
-	w.Header().Set("Location", "/imposters/"+strconv.Itoa(imp.Port))
+	baseURL := buildBaseURL(r)
+	w.Header().Set("Location", baseURL+"/imposters/"+strconv.Itoa(imp.Port))
 
 	// Return created imposter with links
-	result := applyOptions(&imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(&imp, models.SerializeOptions{}, r)
 	response.WriteJSON(w, http.StatusCreated, result)
 }
 
@@ -143,7 +144,7 @@ func (h *ImpostersHandler) DeleteImposters(w http.ResponseWriter, r *http.Reques
 
 	result := make([]*models.Imposter, len(imposters))
 	for i, imp := range imposters {
-		result[i] = applyOptions(imp, options)
+		result[i] = applyOptionsWithRequest(imp, options, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -155,7 +156,7 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 		Imposters []models.Imposter `json:"imposters"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -205,7 +206,7 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 			h.manager.Start(imp)
 		}
 
-		result[i] = applyOptions(imp, models.SerializeOptions{})
+		result[i] = applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -219,20 +220,51 @@ func parseOptions(r *http.Request) models.SerializeOptions {
 	}
 }
 
+// buildBaseURL constructs the base URL from the request
+func buildBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	// Check X-Forwarded-Proto header for proxy scenarios
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+
+	host := r.Host
+	if host == "" {
+		host = "localhost:2525"
+	}
+
+	return scheme + "://" + host
+}
+
 // applyOptions creates a copy of the imposter with options applied
 func applyOptions(imp *models.Imposter, options models.SerializeOptions) *models.Imposter {
+	return applyOptionsWithRequest(imp, options, nil)
+}
+
+// applyOptionsWithRequest creates a copy of the imposter with options applied, using request for absolute URLs
+func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptions, r *http.Request) *models.Imposter {
 	// Create a shallow copy
 	result := *imp
 
-	// Add links
-	result.Links = &models.Links{
-		Self:  &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port)},
-		Stubs: &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port) + "/stubs"},
+	// Build base URL if request is provided
+	baseURL := ""
+	if r != nil {
+		baseURL = buildBaseURL(r)
 	}
 
-	// In replayable mode, exclude requests
+	// In replayable mode, exclude requests and links
 	if options.Replayable {
 		result.Requests = nil
+		result.Links = nil
+	} else {
+		// Add links only in non-replayable mode
+		result.Links = &models.Links{
+			Self:  &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port)},
+			Stubs: &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port) + "/stubs"},
+		}
 	}
 
 	// Remove proxy responses if requested (but keep stubs with non-proxy responses)
@@ -256,13 +288,13 @@ func applyOptions(imp *models.Imposter, options models.SerializeOptions) *models
 		result.Stubs = filtered
 	}
 
-	// Add links to each stub
-	if len(result.Stubs) > 0 {
+	// Add links to each stub (skip in replayable mode)
+	if !options.Replayable && len(result.Stubs) > 0 {
 		stubsWithLinks := make([]models.Stub, len(result.Stubs))
 		for i, stub := range result.Stubs {
 			stubsWithLinks[i] = stub
 			stubsWithLinks[i].Links = &models.StubLinks{
-				Self: &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port) + "/stubs/" + strconv.Itoa(i)},
+				Self: &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port) + "/stubs/" + strconv.Itoa(i)},
 			}
 		}
 		result.Stubs = stubsWithLinks

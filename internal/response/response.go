@@ -12,8 +12,9 @@ type ErrorResponse struct {
 
 // Error represents a single error
 type Error struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code    string  `json:"code"`
+	Message string  `json:"message"`
+	Source  *string `json:"source,omitempty"`
 }
 
 // Error codes matching mountebank
@@ -27,11 +28,16 @@ const (
 
 // WriteError writes an error response
 func WriteError(w http.ResponseWriter, statusCode int, code, message string) {
+	WriteErrorWithSource(w, statusCode, code, message, nil)
+}
+
+// WriteErrorWithSource writes an error response with optional source
+func WriteErrorWithSource(w http.ResponseWriter, statusCode int, code, message string, source *string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 
 	resp := ErrorResponse{
-		Errors: []Error{{Code: code, Message: message}},
+		Errors: []Error{{Code: code, Message: message, Source: source}},
 	}
 
 	json.NewEncoder(w).Encode(resp)

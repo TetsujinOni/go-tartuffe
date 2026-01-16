@@ -32,7 +32,7 @@ func (h *StubsHandler) ReplaceStubs(w http.ResponseWriter, r *http.Request) {
 		Stubs []models.Stub `json:"stubs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *StubsHandler) ReplaceStubs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -70,7 +70,7 @@ func (h *StubsHandler) AddStub(w http.ResponseWriter, r *http.Request) {
 		Index *int        `json:"index,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -91,7 +91,7 @@ func (h *StubsHandler) AddStub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -112,7 +112,7 @@ func (h *StubsHandler) ReplaceStub(w http.ResponseWriter, r *http.Request) {
 
 	var stub models.Stub
 	if err := json.NewDecoder(r.Body).Decode(&stub); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *StubsHandler) DeleteStub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }

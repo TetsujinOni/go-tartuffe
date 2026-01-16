@@ -41,7 +41,7 @@ func (h *ImposterHandler) GetImposter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	options := parseOptions(r)
-	result := applyOptions(imp, options)
+	result := applyOptionsWithRequest(imp, options, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -74,7 +74,7 @@ func (h *ImposterHandler) DeleteImposter(w http.ResponseWriter, r *http.Request)
 	if r.URL.Query().Get("replayable") == "" {
 		options.Replayable = true
 	}
-	result := applyOptions(imp, options)
+	result := applyOptionsWithRequest(imp, options, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -105,7 +105,7 @@ func (h *ImposterHandler) ResetRequests(w http.ResponseWriter, r *http.Request) 
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }

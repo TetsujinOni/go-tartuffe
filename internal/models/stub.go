@@ -66,11 +66,35 @@ type Response struct {
 
 // UnmarshalJSON handles the shorthand format for defaultResponse
 // where {statusCode, body, headers} is equivalent to {is: {statusCode, body, headers}}
+// It also handles _behaviors which can be either an object (single behavior) or array
 func (r *Response) UnmarshalJSON(data []byte) error {
-	// First, try to unmarshal with standard Response format
+	// First, parse as a raw map to check for _behaviors format
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Handle _behaviors: convert object format to array format
+	if behaviorsRaw, ok := raw["_behaviors"]; ok {
+		switch v := behaviorsRaw.(type) {
+		case map[string]interface{}:
+			// Single behavior as object - convert to array
+			raw["_behaviors"] = []interface{}{v}
+		case []interface{}:
+			// Already an array, leave as is
+		}
+	}
+
+	// Re-marshal with normalized behaviors
+	normalizedData, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	// Now unmarshal with standard Response format
 	type responseAlias Response
 	var standard responseAlias
-	if err := json.Unmarshal(data, &standard); err != nil {
+	if err := json.Unmarshal(normalizedData, &standard); err != nil {
 		return err
 	}
 
@@ -83,7 +107,7 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 
 	// Try to unmarshal as a shorthand IsResponse (for defaultResponse)
 	var isResp IsResponse
-	if err := json.Unmarshal(data, &isResp); err != nil {
+	if err := json.Unmarshal(normalizedData, &isResp); err != nil {
 		return err
 	}
 
