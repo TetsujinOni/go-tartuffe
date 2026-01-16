@@ -762,7 +762,13 @@ func (s *Server) writeResponse(w http.ResponseWriter, resp *models.IsResponse) {
 
 	// Set content-type if not set and we have a body
 	if w.Header().Get("Content-Type") == "" && resp != nil && resp.Body != nil {
-		w.Header().Set("Content-Type", "application/json")
+		// Default to text/plain for string bodies, application/json for objects
+		switch resp.Body.(type) {
+		case string, []byte:
+			w.Header().Set("Content-Type", "text/plain")
+		default:
+			w.Header().Set("Content-Type", "application/json")
+		}
 	}
 
 	w.WriteHeader(statusCode)
