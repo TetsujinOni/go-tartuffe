@@ -145,7 +145,7 @@ const (
 
 // IsResponse is a static response definition
 type IsResponse struct {
-	StatusCode    int                    `json:"statusCode,omitempty"`
+	StatusCode    interface{}            `json:"statusCode,omitempty"`    // Can be int or string (for token replacement like "${code}")
 	StatusMessage string                 `json:"statusMessage,omitempty"` // For gRPC error message
 	Headers       map[string]interface{} `json:"headers,omitempty"`       // Can be string or []string for multi-value
 	Body          interface{}            `json:"body,omitempty"`
@@ -184,10 +184,57 @@ type PredicateGen struct {
 type Behavior struct {
 	Wait           interface{} `json:"wait,omitempty"`
 	Repeat         int         `json:"repeat,omitempty"`
-	Copy           *Copy       `json:"copy,omitempty"`
-	Lookup         *Lookup     `json:"lookup,omitempty"`
+	Copy           []Copy      `json:"copy,omitempty"`
+	Lookup         []Lookup    `json:"lookup,omitempty"`
 	Decorate       string      `json:"decorate,omitempty"`
 	ShellTransform string      `json:"shellTransform,omitempty"`
+}
+
+// UnmarshalJSON handles both array and object formats for copy and lookup
+func (b *Behavior) UnmarshalJSON(data []byte) error {
+	// Parse as raw map first
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	// Handle copy field: convert object to array if needed
+	if copyRaw, ok := raw["copy"]; ok {
+		switch v := copyRaw.(type) {
+		case map[string]interface{}:
+			// Single copy as object - convert to array
+			raw["copy"] = []interface{}{v}
+		case []interface{}:
+			// Already an array, leave as is
+		}
+	}
+
+	// Handle lookup field: convert object to array if needed
+	if lookupRaw, ok := raw["lookup"]; ok {
+		switch v := lookupRaw.(type) {
+		case map[string]interface{}:
+			// Single lookup as object - convert to array
+			raw["lookup"] = []interface{}{v}
+		case []interface{}:
+			// Already an array, leave as is
+		}
+	}
+
+	// Re-marshal with normalized copy/lookup
+	normalizedData, err := json.Marshal(raw)
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal into standard Behavior format
+	type behaviorAlias Behavior
+	var standard behaviorAlias
+	if err := json.Unmarshal(normalizedData, &standard); err != nil {
+		return err
+	}
+
+	*b = Behavior(standard)
+	return nil
 }
 
 // Copy behavior copies values from request to response

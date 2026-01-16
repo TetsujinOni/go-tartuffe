@@ -100,11 +100,11 @@ func TestBehaviorUnmarshalSingleObject(t *testing.T) {
 				if len(r.Behaviors) != 1 {
 					t.Errorf("expected 1 behavior, got %d", len(r.Behaviors))
 				}
-				if r.Behaviors[0].Copy == nil {
+				if len(r.Behaviors[0].Copy) == 0 {
 					t.Fatal("expected copy behavior to be set")
 				}
-				if r.Behaviors[0].Copy.Into != "${DEST}" {
-					t.Errorf("expected copy.into=${DEST}, got %q", r.Behaviors[0].Copy.Into)
+				if r.Behaviors[0].Copy[0].Into != "${DEST}" {
+					t.Errorf("expected copy.into=${DEST}, got %q", r.Behaviors[0].Copy[0].Into)
 				}
 			},
 		},

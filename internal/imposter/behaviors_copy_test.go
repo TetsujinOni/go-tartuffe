@@ -69,7 +69,7 @@ func TestCopyWithRegex(t *testing.T) {
 			}
 
 			behavior := models.Behavior{
-				Copy: &tt.copyBehavior,
+				Copy: []models.Copy{tt.copyBehavior},
 			}
 
 			result, err := executor.ApplyBehaviors(req, resp, []models.Behavior{behavior})
@@ -148,7 +148,7 @@ func TestCopyWithJSONPath(t *testing.T) {
 			}
 
 			behavior := models.Behavior{
-				Copy: &tt.copyBehavior,
+				Copy: []models.Copy{tt.copyBehavior},
 			}
 
 			result, err := executor.ApplyBehaviors(req, resp, []models.Behavior{behavior})
@@ -183,14 +183,16 @@ func TestCopyIntoHeader(t *testing.T) {
 	}
 
 	behavior := models.Behavior{
-		Copy: &models.Copy{
-			From: map[string]interface{}{
-				"path": "$PATH",
-			},
-			Into: "${headers}['X-User-ID']",
-			Using: &models.Using{
-				Method:   "regex",
-				Selector: "/users/(\\d+)",
+		Copy: []models.Copy{
+			{
+				From: map[string]interface{}{
+					"path": "$PATH",
+				},
+				Into: "${headers}['X-User-ID']",
+				Using: &models.Using{
+					Method:   "regex",
+					Selector: "/users/(\\d+)",
+				},
 			},
 		},
 	}
@@ -227,14 +229,16 @@ func TestCopyFromQuery(t *testing.T) {
 	}
 
 	behavior := models.Behavior{
-		Copy: &models.Copy{
-			From: map[string]interface{}{
-				"query": "q",
-			},
-			Into: "${body}",
-			Using: &models.Using{
-				Method:   "regex",
-				Selector: ".*",
+		Copy: []models.Copy{
+			{
+				From: map[string]interface{}{
+					"query": "q",
+				},
+				Into: "${body}",
+				Using: &models.Using{
+					Method:   "regex",
+					Selector: ".*",
+				},
 			},
 		},
 	}

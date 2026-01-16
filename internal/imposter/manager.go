@@ -735,8 +735,22 @@ func (s *Server) recordProxyStub(match *MatchResult, newStub *models.Stub) {
 func (s *Server) writeResponse(w http.ResponseWriter, resp *models.IsResponse) {
 	// Set default status code
 	statusCode := 200
-	if resp != nil && resp.StatusCode != 0 {
-		statusCode = resp.StatusCode
+	if resp != nil && resp.StatusCode != nil {
+		switch v := resp.StatusCode.(type) {
+		case int:
+			if v != 0 {
+				statusCode = v
+			}
+		case float64:
+			if v != 0 {
+				statusCode = int(v)
+			}
+		case string:
+			// If it's still a string token (not replaced by copy behavior), try to parse it
+			if code, err := strconv.Atoi(v); err == nil && code != 0 {
+				statusCode = code
+			}
+		}
 	}
 
 	// Set headers

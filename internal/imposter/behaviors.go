@@ -50,19 +50,23 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 			}
 		}
 
-		// Handle copy behavior
-		if behavior.Copy != nil {
-			result, err = e.executeCopy(req, result, behavior.Copy)
-			if err != nil {
-				return nil, fmt.Errorf("copy behavior error: %w", err)
+		// Handle copy behavior (can be array of copy operations)
+		if len(behavior.Copy) > 0 {
+			for _, copyOp := range behavior.Copy {
+				result, err = e.executeCopy(req, result, &copyOp)
+				if err != nil {
+					return nil, fmt.Errorf("copy behavior error: %w", err)
+				}
 			}
 		}
 
-		// Handle lookup behavior
-		if behavior.Lookup != nil {
-			result, err = e.executeLookup(req, result, behavior.Lookup)
-			if err != nil {
-				return nil, fmt.Errorf("lookup behavior error: %w", err)
+		// Handle lookup behavior (can be array of lookup operations)
+		if len(behavior.Lookup) > 0 {
+			for _, lookupOp := range behavior.Lookup {
+				result, err = e.executeLookup(req, result, &lookupOp)
+				if err != nil {
+					return nil, fmt.Errorf("lookup behavior error: %w", err)
+				}
 			}
 		}
 
@@ -396,9 +400,18 @@ func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, into string, v
 	}
 
 	// Parse the "into" field to determine where to place the value
-	// Examples: "${body}", "${headers}['X-User-ID']", "${body}[1]"
+	// Examples: "${body}", "${headers}['X-User-ID']", "${body}[1]", "${code}"
 
-	if strings.HasPrefix(into, "${body}") {
+	if into == "${code}" || into == "${statusCode}" {
+		// Replace status code
+		// Try to convert value to int
+		if code, err := strconv.Atoi(values[0]); err == nil {
+			result.StatusCode = code
+		} else {
+			// If not a valid int, keep as string (will be processed later)
+			result.StatusCode = values[0]
+		}
+	} else if strings.HasPrefix(into, "${body}") {
 		// Appending to body
 		if bodyStr, ok := result.Body.(string); ok {
 			result.Body = bodyStr + values[0]
