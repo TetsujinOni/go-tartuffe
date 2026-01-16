@@ -100,7 +100,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 **Current status (as of 2026-01-16 end-of-session):**
 - **test:api**: **146 passing, 106 failing (252 total) = 57.9%**
 - **test:js**: Not yet tested
-- **Target**: 75%+ passing - **MAKING PROGRESS**
+- **Target**: 75%+ passing excluding the shellTransform tests - **MAKING PROGRESS**
 
 **Recent fixes** (this session):
 - ✅ **Copy behavior** (6 tests) - Fixed array parsing, token replacement
@@ -111,7 +111,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 - **Total: +22 tests fixed**
 
 **Remaining failure categories**:
-1. **shellTransform** (6 tests) - Expected failure (security block)
+1. **shellTransform** (6 tests) - Expected failure (security block) - Won't Fix
 2. **TCP behaviors** (~6 tests) - Decorate/behaviors not working in TCP context
 3. **TCP proxy** (~5 tests) - endOfRequestResolver and error handling issues
 4. **HTTP proxy** (many tests) - Various proxy functionality gaps

@@ -200,23 +200,28 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 func (s *TCPServer) applyTCPBehaviors(requestData, responseData string, behaviors []models.Behavior) string {
 	result := responseData
 
-	for _, behavior := range behaviors {
-		// Handle wait behavior
-		if behavior.Wait != nil {
-			if waitMs, ok := behavior.Wait.(int); ok {
-				time.Sleep(time.Duration(waitMs) * time.Millisecond)
-			} else if waitMs, ok := behavior.Wait.(float64); ok {
-				time.Sleep(time.Duration(int(waitMs)) * time.Millisecond)
-			}
-		}
+	// Create a simple request/response structure for behaviors
+	// For TCP, request data goes in Body, response uses Data field
+	req := &models.Request{
+		Body: requestData,
+	}
+	resp := &models.IsResponse{
+		Data: result,
+	}
 
-		// Handle decorate behavior
-		if behavior.Decorate != "" {
-			decorated := s.executeTCPDecorate(requestData, result, behavior.Decorate)
-			if decorated != "" {
-				result = decorated
-			}
-		}
+	// Use BehaviorExecutor for full behavior support
+	behaviorExecutor := NewBehaviorExecutor(s.jsEngine)
+	processedResp, err := behaviorExecutor.Execute(req, resp, behaviors)
+	if err != nil {
+		log.Printf("[ERROR] TCP behavior execution error: %v", err)
+		return result
+	}
+
+	// Extract data from processed response
+	if processedResp.Data != "" {
+		result = processedResp.Data
+	} else if bodyStr, ok := processedResp.Body.(string); ok {
+		result = bodyStr
 	}
 
 	return result

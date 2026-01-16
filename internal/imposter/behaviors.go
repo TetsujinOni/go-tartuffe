@@ -249,6 +249,9 @@ func (e *BehaviorExecutor) getRequestField(req *models.Request, field string) st
 		return req.Path
 	case "body":
 		return req.Body
+	case "data":
+		// For TCP protocol, "data" refers to the request body
+		return req.Body
 	default:
 		return ""
 	}
@@ -520,6 +523,18 @@ func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, into string, v
 		result.Body = resp.Body
 	}
 
+	// Replace token in Data field (for TCP protocol)
+	if result.Data != "" {
+		replacedData := result.Data
+		for i, value := range values {
+			indexedToken := fmt.Sprintf("%s[%d]", into, i)
+			replacedData = strings.ReplaceAll(replacedData, indexedToken, value)
+		}
+		// Replace the base token
+		replacedData = strings.ReplaceAll(replacedData, into, replacementValue)
+		result.Data = replacedData
+	}
+
 	// Replace token in headers
 	for k, v := range resp.Headers {
 		switch val := v.(type) {
@@ -756,6 +771,7 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 		"statusCode": resp.StatusCode,
 		"headers":    copyHeadersInterface(respHeaders),
 		"body":       resp.Body,
+		"data":       resp.Data, // For TCP protocol
 	}
 
 	loggerObj := jsLogger.createLoggerObject()
@@ -862,6 +878,13 @@ func (e *BehaviorExecutor) convertDecorateResult(val goja.Value, original *model
 	// Extract body
 	if b, ok := respMap["body"]; ok {
 		result.Body = b
+	}
+
+	// Extract data (for TCP protocol)
+	if d, ok := respMap["data"]; ok {
+		if dataStr, ok := d.(string); ok {
+			result.Data = dataStr
+		}
 	}
 
 	return result, nil
