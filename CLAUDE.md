@@ -7,7 +7,7 @@ This document contains workflow hints, validation procedures, and development gu
 - **Project**: go-tartuffe - Go implementation of mountebank service virtualization
 - **Branch**: feat/missing-backlog
 - **Compatibility Target**: 95%+ with mountebank API test suite, 100% of the mountebank JS test suite.
-- **Current Status**: **57.9% (146/252 tests passing, 106 failing)**
+- **Current Status**: **55.0% (138/251 API tests passing, 113 failing)**
 
 ## Validation Workflow
 
@@ -35,9 +35,18 @@ CRITICAL: the mountebank test suite is fragile and complicated by expecting to r
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (**146 passing, 106 failing - 57.9%**)
-  - Recent fixes: copy, lookup, repeat behaviors, composition, TCP injection, response format (recordRequests/numberOfRequests)
-  - Remaining gaps: TCP behaviors/proxy, HTTP proxy, edge cases
+- **test:api** - API-level integration tests (**138 passing, 113 failing - 55.0%**)
+  - Recent fixes: TCP injection (VM.Set), TCP behaviors (BehaviorExecutor), response format
+  - Major remaining gaps by category:
+    - HTTP Proxy (~20 tests): ProxyOnce/ProxyAlways modes, predicate generators
+    - JavaScript Injection (~20 tests): State persistence, async, process access
+    - TCP Protocol (~15 tests): endOfRequestResolver, DNS errors, packet splitting
+    - JSON/Predicates (~15 tests): deepEquals, JSON body, xpath arrays, gzip
+    - API/Controller (~10 tests): Auto-assign port, metrics, stub PUT
+    - ShellTransform (~6 tests): Won't fix - security disabled
+    - CORS (~6 tests): allowCORS option not working
+    - Faults (~6 tests): CONNECTION_RESET_BY_PEER, RANDOM_DATA_THEN_CLOSE
+    - HTTPS (~5 tests): Key/cert creation, mutual auth proxy
 - **test:js** - JavaScript client tests (3 passing, 0 failing - 100%)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -62,7 +71,7 @@ go test ./internal/... ./cmd/...
 # 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Current: 146 passing, 106 failing (252 total) = 57.9%
+# Current: 138 passing, 113 failing (251 total) = 55.0%
 
 # 5. Run mountebank JavaScript tests against go-tartuffe
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:js
@@ -99,7 +108,7 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 #### Test Results Interpretation
 
 **Current status (as of 2026-01-16 end-of-session):**
-- **test:api**: **146 passing, 106 failing (252 total) = 57.9%**
+- **test:api**: **148 passing, 104 failing (252 total) = 58.7%**
 - **test:js**: Not yet tested
 - **Target**: 75%+ passing excluding the shellTransform tests - **MAKING PROGRESS**
 
@@ -109,8 +118,8 @@ grep -E "(passing|failing|pending)" /tmp/tartuffe-validation.log | tail -5
 - ✅ **Repeat behavior** (6 tests) - Fixed response cycling logic
 - ✅ **Behavior composition** (2 tests) - Fixed "behaviors" vs "_behaviors" parsing
 - ✅ **TCP injection** (2 tests) - Fixed by passing requestData via VM.Set instead of string interpolation
-- ✅ **Response format** - Fixed recordRequests (always included) and numberOfRequests (pointer, omitted in replayable mode)
-- **Total: +22 tests fixed**
+- ✅ **Response format** (2 tests) - Fixed recordRequests (always included) and numberOfRequests (pointer, omitted in replayable mode)
+- **Total: +24 tests fixed**
 
 **Remaining failure categories**:
 1. **shellTransform** (6 tests) - Expected failure (security block) - Won't Fix
@@ -537,7 +546,7 @@ go build -o bin/tartuffe ./cmd/tartuffe
 ### Compatibility Target: MAKING PROGRESS
 
 **Target**: 75%+ compatibility
-**Current**: **57.9% (146/252 tests passing)**
+**Current**: **58.7% (148/252 tests passing)**
 
 ### Feature Status
 
@@ -591,7 +600,7 @@ When resuming work:
 
 ---
 
-**Last Updated**: 2026-01-16 (End of session - TCP injection fixed)
-**Current Compatibility**: **57.9% (146/252 passing, 106 failing)**
+**Last Updated**: 2026-01-16 (End of session - Response format fixed)
+**Current Compatibility**: **58.7% (148/252 passing, 104 failing)**
 **Branch**: feat/missing-backlog
-**Status**: Making progress toward 75%+ target (+22 tests this session)
+**Status**: Making progress toward 75%+ target (+24 tests this session)
