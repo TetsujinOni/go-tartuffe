@@ -2,12 +2,10 @@ package imposter
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -71,12 +69,10 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 			}
 		}
 
-		// Handle shellTransform behavior
+		// ShellTransform is not supported for security reasons
+		// See docs/SECURITY.md for details
 		if behavior.ShellTransform != "" {
-			result, err = e.executeShellTransform(req, result, behavior.ShellTransform)
-			if err != nil {
-				return nil, fmt.Errorf("shellTransform behavior error: %w", err)
-			}
+			return nil, fmt.Errorf("shellTransform behavior is not supported (security risk)")
 		}
 	}
 
@@ -677,69 +673,7 @@ func (e *BehaviorExecutor) convertDecorateResult(val goja.Value, original *model
 	return result, nil
 }
 
-// executeShellTransform transforms response using an external command
-func (e *BehaviorExecutor) executeShellTransform(req *models.Request, resp *models.IsResponse, command string) (*models.IsResponse, error) {
-	// Prepare request and response as JSON
-	reqJSON, _ := json.Marshal(map[string]interface{}{
-		"method":  req.Method,
-		"path":    req.Path,
-		"query":   req.Query,
-		"headers": req.Headers,
-		"body":    req.Body,
-	})
-
-	respJSON, _ := json.Marshal(map[string]interface{}{
-		"statusCode": resp.StatusCode,
-		"headers":    resp.Headers,
-		"body":       resp.Body,
-	})
-
-	// Set environment variables
-	cmd := exec.Command("sh", "-c", command)
-	cmd.Env = append(os.Environ(),
-		"MB_REQUEST="+string(reqJSON),
-		"MB_RESPONSE="+string(respJSON),
-	)
-
-	// Capture output
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("shell command failed: %w (stderr: %s)", err, stderr.String())
-	}
-
-	// Parse output as JSON response
-	var result map[string]interface{}
-	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
-		return nil, fmt.Errorf("shell command returned invalid JSON: %s", stdout.String())
-	}
-
-	// Convert to IsResponse
-	newResp := &models.IsResponse{
-		StatusCode: resp.StatusCode,
-		Headers:    make(map[string]interface{}),
-	}
-
-	if sc, ok := result["statusCode"]; ok {
-		switch v := sc.(type) {
-		case float64:
-			newResp.StatusCode = int(v)
-		case int:
-			newResp.StatusCode = v
-		}
-	}
-
-	if h, ok := result["headers"].(map[string]interface{}); ok {
-		for k, v := range h {
-			newResp.Headers[k] = v
-		}
-	}
-
-	if b, ok := result["body"]; ok {
-		newResp.Body = b
-	}
-
-	return newResp, nil
-}
+// executeShellTransform is disabled for security reasons
+// ShellTransform allows arbitrary command execution which is a security risk.
+// Users should use JavaScript injection (decorate behavior) instead.
+// See docs/SECURITY.md for details and alternatives.

@@ -19,12 +19,14 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 **Mountebank Test Suite (API tests only)**: 46 passing, 129 failing (175 total)
 
 **Major Failure Areas**:
-- HTTP/HTTPS Behaviors (~48 failures) - wait, decorate, repeat, shellTransform, copy, lookup
+- HTTP/HTTPS Behaviors (~44 failures) - wait, decorate, repeat, copy, lookup (shellTransform disabled for security)
 - HTTP/HTTPS Injection (~24 failures) - predicate injection, response injection, state
 - HTTP/HTTPS Proxy (~10 failures) - proxy forwarding, proxy configuration
 - HTTP/HTTPS Stub/Imposter (~30+ failures) - CORS, auto-assign port, headers, request recording
 - TCP (~10+ failures) - proxy, injection, various edge cases
 - Controller operations (~7 failures) - DELETE/PUT response formats
+
+**Won't Fix** (security/architectural): shellTransform (4 tests), Node.js features (4 tests), CLI (17 tests), Web UI (5 tests)
 
 **Working Features** (46 passing tests):
 - ✅ Basic imposter creation/deletion (POST/DELETE /imposters)
@@ -41,7 +43,7 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ### Critical Priority (P0)
 
-#### HTTP/HTTPS Behaviors (~48 failing tests)
+#### HTTP/HTTPS Behaviors (~44 failing tests)
 **Impact**: High - advanced response transformation features
 
 **Missing Features**:
@@ -49,7 +51,6 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 - `wait` as function - dynamic latency (2 tests)
 - `decorate` behavior - post-process responses with JavaScript (8 tests)
 - `repeat` behavior - loop through response array (3 tests)
-- `shellTransform` behavior - transform via shell command (2 tests)
 - `copy` behavior - copy from request to response (6 tests: regex, xpath, jsonpath)
 - `lookup` behavior - lookup from CSV file (6 tests)
 - Behavior composition - multiple behaviors in sequence (3 tests)
@@ -57,6 +58,8 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 **Files to check**:
 - `internal/imposter/behaviors.go` - Behavior implementations
 - `internal/models/stub.go` - Behavior model definitions
+
+**Note**: `shellTransform` moved to Won't Fix (security risk - see docs/SECURITY.md)
 
 **Estimated effort**: 3-4 days
 
@@ -159,6 +162,18 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 
 ### Won't Fix (Expected Differences)
 
+#### shellTransform Behavior (4 test failures)
+**Reason**: Security Risk - Arbitrary Command Execution
+
+The `shellTransform` behavior is **intentionally disabled** for security:
+- Allows arbitrary shell command execution
+- Creates command injection vulnerabilities
+- Unrestricted system access
+
+**Alternative**: Use `decorate` behavior with JavaScript for response transformations.
+
+See [docs/SECURITY.md](docs/SECURITY.md) for migration guide and security details.
+
 #### Node.js-Specific Features (4 test failures)
 These are architectural differences, not bugs:
 - `require()` for Node modules - tartuffe uses goja (ES5.1), not Node.js
@@ -178,10 +193,11 @@ These are architectural differences, not bugs:
 
 Based on impact and effort, recommended implementation order:
 
-1. **HTTP Behaviors** (P0) - Most impactful, ~48 test fixes
+1. **HTTP Behaviors** (P0) - Most impactful, ~44 test fixes
    - Start with `wait` and `decorate` (most commonly used)
    - Then `copy`, `lookup`, `repeat`
-   - Finally `shellTransform` and composition
+   - Finally behavior composition
+   - Note: `shellTransform` disabled for security (4 tests won't fix)
 
 2. **HTTP Injection** (P0) - Dynamic behavior, ~24 test fixes
    - Predicate injection
