@@ -50,7 +50,8 @@ func TestDecorateBasic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -88,7 +89,7 @@ func TestDecorateWithRequestAccess(t *testing.T) {
 		decorateScript string
 		requestPath    string
 		requestMethod  string
-		requestHeaders map[string]interface{}
+		requestHeaders map[string]string
 		wantBody       string
 	}{
 		{
@@ -112,7 +113,7 @@ func TestDecorateWithRequestAccess(t *testing.T) {
 			decorateScript: `function(request, response) {
 				response.body = 'Auth: ' + request.headers['Authorization'];
 			}`,
-			requestHeaders: map[string]interface{}{
+			requestHeaders: map[string]string{
 				"Authorization": "Bearer token123",
 			},
 			wantBody: "Auth: Bearer token123",
@@ -121,7 +122,8 @@ func TestDecorateWithRequestAccess(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method:  tt.requestMethod,
@@ -183,7 +185,8 @@ func TestDecorateReturnValue(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -216,7 +219,8 @@ func TestDecorateReturnValue(t *testing.T) {
 
 // TestDecorateContentLength tests that decorate adjusts Content-Length when body changes
 func TestDecorateContentLength(t *testing.T) {
-	executor := NewBehaviorExecutor()
+	jsEngine := NewJSEngine()
+	executor := NewBehaviorExecutor(jsEngine)
 
 	req := &models.Request{
 		Method: "GET",
@@ -253,7 +257,8 @@ func TestDecorateContentLength(t *testing.T) {
 
 // TestDecorateMultipleTimes tests applying decorate behavior multiple times
 func TestDecorateMultipleTimes(t *testing.T) {
-	executor := NewBehaviorExecutor()
+	jsEngine := NewJSEngine()
+	executor := NewBehaviorExecutor(jsEngine)
 
 	req := &models.Request{
 		Method: "GET",
@@ -317,7 +322,8 @@ func TestDecorateErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",

@@ -27,6 +27,11 @@ func NewBehaviorExecutor(jsEngine *JSEngine) *BehaviorExecutor {
 	}
 }
 
+// ApplyBehaviors applies all behaviors to a response
+func (e *BehaviorExecutor) ApplyBehaviors(req *models.Request, resp *models.IsResponse, behaviors []models.Behavior) (*models.IsResponse, error) {
+	return e.Execute(req, resp, behaviors)
+}
+
 // Execute applies all behaviors to a response
 func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse, behaviors []models.Behavior) (*models.IsResponse, error) {
 	if len(behaviors) == 0 {
@@ -40,7 +45,7 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 
 		// Handle wait behavior
 		if behavior.Wait != nil {
-			if err = e.executeWait(behavior.Wait); err != nil {
+			if err = e.executeWait(req, behavior.Wait); err != nil {
 				return nil, fmt.Errorf("wait behavior error: %w", err)
 			}
 		}
@@ -80,7 +85,7 @@ func (e *BehaviorExecutor) Execute(req *models.Request, resp *models.IsResponse,
 }
 
 // executeWait adds latency to the response
-func (e *BehaviorExecutor) executeWait(wait interface{}) error {
+func (e *BehaviorExecutor) executeWait(req *models.Request, wait interface{}) error {
 	var milliseconds int
 
 	switch v := wait.(type) {
@@ -94,7 +99,7 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 			milliseconds = ms
 		} else {
 			// Try to execute as JavaScript function
-			ms, err := e.executeWaitFunction(v)
+			ms, err := e.executeWaitFunction(req, v)
 			if err != nil {
 				return err
 			}
@@ -102,6 +107,10 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 		}
 	default:
 		return fmt.Errorf("invalid wait value type: %T", wait)
+	}
+
+	if milliseconds < 0 {
+		return fmt.Errorf("wait value cannot be negative: %d", milliseconds)
 	}
 
 	if milliseconds > 0 {
@@ -112,13 +121,24 @@ func (e *BehaviorExecutor) executeWait(wait interface{}) error {
 }
 
 // executeWaitFunction executes a JavaScript function to get wait time
-func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
+func (e *BehaviorExecutor) executeWaitFunction(req *models.Request, script string) (int, error) {
 	vm := goja.New()
 	jsLogger := NewJSLogger("behavior:wait")
+
+	// Create request object
+	requestObj := map[string]interface{}{
+		"method":  req.Method,
+		"path":    req.Path,
+		"query":   req.Query,
+		"headers": req.Headers,
+		"body":    req.Body,
+	}
+
+	vm.Set("request", requestObj)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// Wrap and execute the function
-	wrappedScript := fmt.Sprintf(`(%s)()`, script)
+	// Wrap and execute the function with request parameter
+	wrappedScript := fmt.Sprintf(`(%s)(request)`, script)
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
 		return 0, formatJSError(err, script, "wait behavior")
@@ -130,6 +150,8 @@ func (e *BehaviorExecutor) executeWaitFunction(script string) (int, error) {
 		return int(v), nil
 	case float64:
 		return int(v), nil
+	case int:
+		return v, nil
 	default:
 		return 0, fmt.Errorf("wait function must return a number, got %T", v)
 	}
@@ -155,6 +177,11 @@ func (e *BehaviorExecutor) executeCopy(req *models.Request, resp *models.IsRespo
 		values = []string{fromValue}
 	}
 
+	// If no values extracted, return original response
+	if len(values) == 0 {
+		return resp, nil
+	}
+
 	// Replace tokens in response
 	result := e.replaceTokens(resp, copyConfig.Into, values)
 	return result, nil
@@ -166,11 +193,28 @@ func (e *BehaviorExecutor) getFromValue(req *models.Request, from interface{}) s
 	case string:
 		return e.getRequestField(req, v)
 	case map[string]interface{}:
-		// Nested field access like {"query": "id"}
+		// Nested field access like {"query": "id"} or {"path": "$PATH"}
 		for field, subfield := range v {
 			// If it's a map field like query or headers
 			if subfieldStr, ok := subfield.(string); ok {
 				switch strings.ToLower(field) {
+				case "path":
+					// Return the path itself if value is $PATH or similar
+					if strings.HasPrefix(subfieldStr, "$") {
+						return req.Path
+					}
+					// Otherwise treat as JSONPath or XPath selector
+					return req.Path
+				case "body":
+					// If value starts with $, it's a JSONPath selector
+					if strings.HasPrefix(subfieldStr, "$") {
+						// Extract using JSONPath
+						values, err := e.extractJSONPath(req.Body, subfieldStr)
+						if err == nil && len(values) > 0 {
+							return values[0]
+						}
+					}
+					return req.Body
 				case "query":
 					if req.Query != nil {
 						return req.Query[subfieldStr]
@@ -254,9 +298,15 @@ func (e *BehaviorExecutor) extractJSONPath(source, selector string) ([]string, e
 	// Simple JSONPath implementation for common cases
 	// Full JSONPath would require a library
 
+	// If selector is just "$", return the source as-is
+	if selector == "$" {
+		return []string{source}, nil
+	}
+
 	var data interface{}
 	if err := json.Unmarshal([]byte(source), &data); err != nil {
-		return []string{}, nil
+		// If source is not valid JSON, return it as-is
+		return []string{source}, nil
 	}
 
 	// Handle simple paths like $.field or $..field
@@ -325,7 +375,8 @@ func (e *BehaviorExecutor) jsonToString(data interface{}) string {
 }
 
 // replaceTokens replaces tokens in the response
-func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, token string, values []string) *models.IsResponse {
+// token describes the target location (e.g., "${body}", "${headers}['X-ID']")
+func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, into string, values []string) *models.IsResponse {
 	result := &models.IsResponse{
 		StatusCode: resp.StatusCode,
 		Headers:    make(map[string]interface{}),
@@ -334,35 +385,45 @@ func (e *BehaviorExecutor) replaceTokens(resp *models.IsResponse, token string, 
 
 	// Copy headers
 	for k, v := range resp.Headers {
-		if str, ok := v.(string); ok {
-			result.Headers[k] = e.replaceInString(str, token, values)
-		} else {
-			result.Headers[k] = v
-		}
+		result.Headers[k] = v
 	}
 
-	// Replace in body
-	if resp.Body != nil {
-		switch body := resp.Body.(type) {
-		case string:
-			result.Body = e.replaceInString(body, token, values)
-		default:
-			// For non-string bodies, try to marshal and replace
-			if b, err := json.Marshal(body); err == nil {
-				replaced := e.replaceInString(string(b), token, values)
-				var parsed interface{}
-				if json.Unmarshal([]byte(replaced), &parsed) == nil {
-					result.Body = parsed
-				} else {
-					result.Body = replaced
-				}
-			} else {
-				result.Body = body
-			}
+	// Copy body initially
+	result.Body = resp.Body
+
+	if len(values) == 0 {
+		return result
+	}
+
+	// Parse the "into" field to determine where to place the value
+	// Examples: "${body}", "${headers}['X-User-ID']", "${body}[1]"
+
+	if strings.HasPrefix(into, "${body}") {
+		// Appending to body
+		if bodyStr, ok := result.Body.(string); ok {
+			result.Body = bodyStr + values[0]
+		}
+	} else if strings.HasPrefix(into, "${headers}") {
+		// Setting a header
+		// Parse header name from ${headers}['X-User-ID'] or ${headers}[X-User-ID]
+		headerName := e.extractHeaderName(into)
+		if headerName != "" {
+			result.Headers[headerName] = values[0]
 		}
 	}
 
 	return result
+}
+
+// extractHeaderName extracts header name from ${headers}['X-User-ID'] format
+func (e *BehaviorExecutor) extractHeaderName(into string) string {
+	// Match patterns like ${headers}['X-User-ID'], ${headers}["X-User-ID"], or ${headers}[X-User-ID]
+	re := regexp.MustCompile(`\$\{headers\}\[['"]?([^'"\]]+)['"]?\]`)
+	matches := re.FindStringSubmatch(into)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
 }
 
 // replaceInString replaces tokens in a string

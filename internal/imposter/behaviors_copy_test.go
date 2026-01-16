@@ -8,13 +8,12 @@ import (
 
 // TestCopyWithRegex tests copy behavior using regex selectors
 func TestCopyWithRegex(t *testing.T) {
-	t.Skip("Copy behavior not yet implemented - test created to guide implementation")
 
 	tests := []struct {
 		name         string
 		copyBehavior models.Copy
 		requestPath  string
-		requestBody  interface{}
+		requestBody  string
 		initialBody  string
 		wantBody     string
 	}{
@@ -54,7 +53,8 @@ func TestCopyWithRegex(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "GET",
@@ -88,7 +88,6 @@ func TestCopyWithRegex(t *testing.T) {
 
 // TestCopyWithJSONPath tests copy behavior using jsonpath selectors
 func TestCopyWithJSONPath(t *testing.T) {
-	t.Skip("Copy behavior not yet implemented - test created to guide implementation")
 
 	tests := []struct {
 		name         string
@@ -133,7 +132,8 @@ func TestCopyWithJSONPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			executor := NewBehaviorExecutor()
+			jsEngine := NewJSEngine()
+		executor := NewBehaviorExecutor(jsEngine)
 
 			req := &models.Request{
 				Method: "POST",
@@ -167,9 +167,9 @@ func TestCopyWithJSONPath(t *testing.T) {
 
 // TestCopyIntoHeader tests copying into response headers
 func TestCopyIntoHeader(t *testing.T) {
-	t.Skip("Copy behavior not yet implemented - test created to guide implementation")
 
-	executor := NewBehaviorExecutor()
+	jsEngine := NewJSEngine()
+	executor := NewBehaviorExecutor(jsEngine)
 
 	req := &models.Request{
 		Method: "GET",
@@ -207,14 +207,14 @@ func TestCopyIntoHeader(t *testing.T) {
 
 // TestCopyFromQuery tests copying from query parameters
 func TestCopyFromQuery(t *testing.T) {
-	t.Skip("Copy behavior not yet implemented - test created to guide implementation")
 
-	executor := NewBehaviorExecutor()
+	jsEngine := NewJSEngine()
+	executor := NewBehaviorExecutor(jsEngine)
 
 	req := &models.Request{
 		Method: "GET",
 		Path:   "/search",
-		Query: map[string]interface{}{
+		Query: map[string]string{
 			"q":    "golang",
 			"page": "2",
 		},
