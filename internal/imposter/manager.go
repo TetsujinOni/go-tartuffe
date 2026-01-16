@@ -631,8 +631,21 @@ func (s *Server) mergeWithDefault(resp, defaultResp *models.IsResponse) *models.
 	}
 
 	// Fill in missing fields from default
-	if merged.StatusCode == 0 && defaultResp.StatusCode != 0 {
+	// StatusCode is interface{} so we need to check if it's nil or zero
+	if merged.StatusCode == nil && defaultResp.StatusCode != nil {
 		merged.StatusCode = defaultResp.StatusCode
+	} else if merged.StatusCode != nil {
+		// Check if it's a zero value
+		switch v := merged.StatusCode.(type) {
+		case int:
+			if v == 0 && defaultResp.StatusCode != nil {
+				merged.StatusCode = defaultResp.StatusCode
+			}
+		case float64:
+			if v == 0 && defaultResp.StatusCode != nil {
+				merged.StatusCode = defaultResp.StatusCode
+			}
+		}
 	}
 	if merged.Body == nil && defaultResp.Body != nil {
 		merged.Body = defaultResp.Body
