@@ -23,7 +23,7 @@ func TestTCPPredicateInjection(t *testing.T) {
 		{
 			name: "simple indexOf injection",
 			inject: `function(request, logger) {
-				return request.data.indexOf('HELLO') >= 0;
+				return request.data.toString().indexOf('HELLO') >= 0;
 			}`,
 			requestData:  "HELLO WORLD",
 			shouldMatch:  true,
@@ -31,8 +31,8 @@ func TestTCPPredicateInjection(t *testing.T) {
 		},
 		{
 			name: "indexOf injection no match",
-			inject: `function(request, logger) {
-				return request.data.indexOf('GOODBYE') >= 0;
+			inject: `function(r, logger) {
+				return r.data.toString().indexOf('GOODBYE') >= 0;
 			}`,
 			requestData:  "HELLO WORLD",
 			shouldMatch:  false,
@@ -40,9 +40,9 @@ func TestTCPPredicateInjection(t *testing.T) {
 		},
 		{
 			name: "regex injection",
-			inject: `function(request, logger) {
+			inject: `function(r, logger) {
 				// Trim newline before testing
-				var trimmed = request.data.replace(/\n$/, '');
+				var trimmed = r.data.toString().replace(/\n$/, '');
 				return /^[A-Z]+$/.test(trimmed);
 			}`,
 			requestData:  "ALLCAPS",
@@ -51,10 +51,10 @@ func TestTCPPredicateInjection(t *testing.T) {
 		},
 		{
 			name: "logger usage in injection",
-			inject: `function(request, logger) {
-				logger.info('Checking request: ' + request.data);
+			inject: `function(r, logger) {
+				logger.info('Checking request: ' + r.data);
 				// Trim newline for comparison
-				return request.data.replace(/\n$/, '') === 'TEST';
+				return r.data.toString().replace(/\n$/, '') === 'TEST';
 			}`,
 			requestData:  "TEST",
 			shouldMatch:  true,
