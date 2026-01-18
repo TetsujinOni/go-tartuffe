@@ -5,12 +5,13 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 ## Current Status
 
 **Mountebank Test Harness**: ✅ Working (with MB_EXECUTABLE correctly set)
-**Overall Progress**: **83.7% (211/252 tests) | 89.4% adjusted (211/236)** ✅ TARGET EXCEEDED
-**Last Updated**: 2026-01-18 (After decorate behavior header handling fix)
+**Overall Progress**: **84.1% (212/252 tests) | 89.8% adjusted (212/236)** ✅ TARGET EXCEEDED
+**Last Updated**: 2026-01-18 (After predicate generator injection implementation)
 
-**Remaining Failures**: 41 tests (25 actionable + 15 security/architectural + 1 deliberate difference)
+**Remaining Failures**: 40 tests (24 actionable + 15 security/architectural + 1 deliberate difference)
 
 **Recent Work**:
+- ✅ **Predicate generator injection** - Implemented JavaScript injection for programmatic predicate generation in proxy mode
 - ✅ **Decorate behavior header handling fix** - Fixed `response.headers = request.headers` assignment in JavaScript decorate behaviors
 - ✅ **Host header handling fix** - Fixed Host header extraction and injection in proxy requests
 - ✅ **JSON key ordering fix** - Fixed intermittent sub-object matching failures in JavaScript injection
@@ -18,7 +19,7 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 - ✅ **JSON body storage fix (issue #656)** - Proxy now correctly stores pretty-printed JSON as objects
 - ✅ HTTP Proxy implementation complete in go-tartuffe (integration tests passing)
 - ✅ ProxyAlways mode, predicate generators, binary handling implemented
-- ✅ HTTP Proxy tests: 25/33 passing (76%, improved from 73%)
+- ✅ HTTP Proxy tests: 26/33 passing (79%, improved from 76%)
 - ✅ Query string fidelity and JSON body storage working
 - ✅ Binary MIME type detection (7 types) working
 
@@ -56,31 +57,30 @@ Remaining gaps from mountebank mbTest suite validation against go-tartuffe.
 - Benefits: Native scraping support, better performance, wider tooling compatibility
 - Status: Deliberate simplification toward modern norms, not a compatibility gap
 
-### Actionable Failures - 25 tests
+### Actionable Failures - 24 tests
 
-#### 1. HTTP/HTTPS Proxy - 7 tests ⚠️
+#### 1. HTTP/HTTPS Proxy - 6 tests ⚠️
 **Status**: **Significant functionality implemented but tests failing**
 **Files**: `mbTest/api/http/httpProxyStubTest.js`
 
 **Note**: Integration tests show features working, but mountebank test failures suggest issues with:
 - Test environment differences (port conflicts, timing)
-- JSON key ordering (Go vs Node.js)
 - Response format expectations
 
-**Failing tests** (7 tests):
+**Failing tests** (6 tests):
 - ❌ Proxy to HTTPS (cross-protocol)
 - ❌ Invalid domain error handling
 - ❌ CONNECT method (requires HTTPS tunneling)
-- ❌ Predicate creation/injection
 - ❌ Persist behaviors from origin
 - ❌ Add latency (addWaitBehavior)
 - ❌ removeProxies export
 
-**Fixed tests** (2 tests):
+**Fixed tests** (3 tests):
 - ✅ Host header validation - Fixed by extracting Host from r.Host and handling in proxy injectHeaders
 - ✅ Inject headers - Fixed by supporting map[string]string type in decorate behavior header extraction
+- ✅ Predicate creation/injection - Implemented JavaScript injection for programmatic predicate generation
 
-**Files modified**: `internal/imposter/proxy.go`, `internal/imposter/matcher.go`, `internal/imposter/selectors.go`, `internal/models/request.go`, `internal/api/handlers/imposter.go`, `internal/imposter/behaviors.go`
+**Files modified**: `internal/imposter/proxy.go`, `internal/imposter/matcher.go`, `internal/imposter/selectors.go`, `internal/models/request.go`, `internal/api/handlers/imposter.go`, `internal/imposter/behaviors.go`, `internal/imposter/inject.go`, `internal/models/stub.go`
 
 **Test files created**:
 - `test/integration/http_proxy_always_test.go` (13 tests)
@@ -239,26 +239,26 @@ pkill -f tartuffe || true
 ## Achievement Summary
 
 **Target**: 75%+ compatibility
-**Current**: **83.7% raw / 89.4% adjusted** ✅ TARGET EXCEEDED
+**Current**: **84.1% raw / 89.8% adjusted** ✅ TARGET EXCEEDED
 
 **Current Achievement:**
-- ✅ **83.7% raw compatibility** (211/252 tests) - **TARGET EXCEEDED BY 8.7%!**
-- ✅ **89.4% adjusted compatibility** (211/236 tests excluding security blocks)
+- ✅ **84.1% raw compatibility** (212/252 tests) - **TARGET EXCEEDED BY 9.1%!**
+- ✅ **89.8% adjusted compatibility** (212/236 tests excluding security blocks)
 - ✅ Core functionality including JSON predicates, HTTP stubs, gzip, and XPath all working
 - ✅ All 228 go-tartuffe integration tests passing
 - ✅ Security improvements over mountebank (sandboxed execution, no shellTransform)
 
 **Remaining Work:**
-- 25 actionable failures (7 HTTP Proxy, 11 TCP, 7 other)
+- 24 actionable failures (6 HTTP Proxy, 11 TCP, 7 other)
 - 15 intentional security/architectural deviations (Won't Fix)
 - 1 deliberate design difference (Prometheus metrics format)
 
 **Test Breakdown** (2026-01-18 validation):
-- **Passing**: 211 tests (83.7%)
-- **Failing**: 41 tests (16.3%)
+- **Passing**: 212 tests (84.1%)
+- **Failing**: 40 tests (15.9%)
   - Security/architectural: 15 tests (won't fix)
   - Deliberate differences: 1 test (Prometheus metrics)
-  - Actionable: 25 tests
+  - Actionable: 24 tests
 
 **Key Discovery**:
 - Many HTTP Proxy features are implemented and working in go-tartuffe integration tests
