@@ -1,6 +1,7 @@
 package models
 
 import (
+	"compress/gzip"
 	"encoding/base64"
 	"io"
 	"mime"
@@ -13,16 +14,17 @@ import (
 
 // Request represents a simplified HTTP request for matching
 type Request struct {
-	RequestFrom string            `json:"requestFrom,omitempty"`
-	Method      string            `json:"method"`
-	Path        string            `json:"path"`
-	Query       map[string]string `json:"query,omitempty"`
-	Headers     map[string]string `json:"headers,omitempty"`
-	Body        string            `json:"body,omitempty"`
-	Form        map[string]string `json:"form,omitempty"`
-	IP          string            `json:"ip,omitempty"`
-	Timestamp   string            `json:"timestamp,omitempty"`
-	Mode        string            `json:"_mode,omitempty"`
+	RequestFrom  string            `json:"requestFrom,omitempty"`
+	Method       string            `json:"method"`
+	Path         string            `json:"path"`
+	Query        map[string]string `json:"query,omitempty"`
+	RawQuery     string            `json:"-"` // Preserve original query string (not serialized)
+	Headers      map[string]string `json:"headers,omitempty"`
+	Body         string            `json:"body,omitempty"`
+	Form         map[string]string `json:"form,omitempty"`
+	IP           string            `json:"ip,omitempty"`
+	Timestamp    string            `json:"timestamp,omitempty"`
+	Mode         string            `json:"_mode,omitempty"`
 }
 
 // NewRequestFromHTTP creates a Request from an http.Request
@@ -31,7 +33,19 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 	var body string
 	var mode string
 	if r.Body != nil {
-		bodyBytes, err := io.ReadAll(r.Body)
+		var bodyReader io.Reader = r.Body
+
+		// Check for gzip encoding and decompress if needed
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gzipReader, err := gzip.NewReader(r.Body)
+			if err != nil {
+				return nil, err
+			}
+			defer gzipReader.Close()
+			bodyReader = gzipReader
+		}
+
+		bodyBytes, err := io.ReadAll(bodyReader)
 		if err != nil {
 			return nil, err
 		}
@@ -63,6 +77,12 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 		}
 	}
 
+	// Add Host header manually (Go doesn't include it in r.Header)
+	// This is critical for proxy scenarios where predicates match on Host
+	if r.Host != "" {
+		headers["Host"] = r.Host
+	}
+
 	// Extract IP
 	ip := r.RemoteAddr
 	if idx := strings.LastIndex(ip, ":"); idx != -1 {
@@ -81,6 +101,7 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 		Method:      r.Method,
 		Path:        r.URL.Path,
 		Query:       query,
+		RawQuery:    r.URL.RawQuery, // Preserve original query string
 		Headers:     headers,
 		Body:        body,
 		Form:        form,

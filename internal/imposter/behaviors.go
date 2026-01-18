@@ -818,15 +818,6 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 	return e.convertDecorateResult(result, resp)
 }
 
-// copyHeaders creates a mutable copy of headers
-func copyHeaders(src map[string]string) map[string]interface{} {
-	result := make(map[string]interface{})
-	for k, v := range src {
-		result[k] = v
-	}
-	return result
-}
-
 // copyHeadersInterface creates a mutable copy of headers from interface map
 func copyHeadersInterface(src map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
@@ -850,8 +841,9 @@ func (e *BehaviorExecutor) convertDecorateResult(val goja.Value, original *model
 
 	result := &models.IsResponse{
 		StatusCode: original.StatusCode,
-		Headers:    make(map[string]interface{}),
+		Headers:    copyHeadersInterface(original.Headers), // Preserve original headers
 		Mode:       original.Mode,
+		Body:       original.Body, // Preserve original body
 	}
 
 	// Extract statusCode
@@ -866,16 +858,25 @@ func (e *BehaviorExecutor) convertDecorateResult(val goja.Value, original *model
 		}
 	}
 
-	// Extract headers
+	// Extract and merge headers (decorator changes override originals)
+	// Headers can come back as either map[string]interface{} or map[string]string
+	// depending on whether they were modified in JS or assigned from request.headers
 	if h, ok := respMap["headers"]; ok {
-		if headersMap, ok := h.(map[string]interface{}); ok {
-			for k, v := range headersMap {
+		switch headers := h.(type) {
+		case map[string]interface{}:
+			// Headers created/modified in JavaScript
+			for k, v := range headers {
+				result.Headers[k] = v
+			}
+		case map[string]string:
+			// Headers assigned from request.headers (preserves original Go type)
+			for k, v := range headers {
 				result.Headers[k] = v
 			}
 		}
 	}
 
-	// Extract body
+	// Extract body (overwrites original if present in decorator result)
 	if b, ok := respMap["body"]; ok {
 		result.Body = b
 	}
