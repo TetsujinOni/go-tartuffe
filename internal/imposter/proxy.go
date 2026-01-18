@@ -19,7 +19,8 @@ import (
 
 // ProxyHandler handles proxy responses
 type ProxyHandler struct {
-	client *http.Client
+	client   *http.Client
+	jsEngine *JSEngine
 }
 
 // NewProxyHandler creates a new proxy handler
@@ -37,6 +38,7 @@ func NewProxyHandler() *ProxyHandler {
 				return http.ErrUseLastResponse
 			},
 		},
+		jsEngine: NewJSEngine(),
 	}
 }
 
@@ -328,6 +330,16 @@ func (h *ProxyHandler) generatePredicates(req *models.Request, generators []mode
 	var predicates []models.Predicate
 
 	for _, gen := range generators {
+		// Handle inject-based predicate generation
+		if gen.Inject != "" {
+			generated, err := h.executePredicateInjection(req, gen.Inject)
+			if err == nil && generated != nil {
+				predicates = append(predicates, generated...)
+			}
+			continue
+		}
+
+		// Handle matches-based predicate generation
 		pred := h.generatePredicate(req, &gen)
 		if pred != nil {
 			predicates = append(predicates, *pred)
@@ -436,6 +448,61 @@ func (h *ProxyHandler) extractWithPattern(value interface{}, pattern string) int
 	}
 
 	return nil
+}
+
+// executePredicateInjection executes JavaScript to generate predicates from a request
+func (h *ProxyHandler) executePredicateInjection(req *models.Request, script string) ([]models.Predicate, error) {
+	// Execute the predicate generator function with the request
+	result, err := h.jsEngine.ExecutePredicateGenerator(script, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// The result should be an array of predicates
+	// Convert from interface{} to []models.Predicate
+	resultSlice, ok := result.([]interface{})
+	if !ok {
+		// If it's not an array, return empty
+		return nil, nil
+	}
+
+	var predicates []models.Predicate
+	for _, item := range resultSlice {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Convert each predicate map to a models.Predicate
+		pred := models.Predicate{}
+
+		// Check for each operator type
+		if equals, ok := itemMap["equals"]; ok {
+			pred.Equals = equals
+		}
+		if deepEquals, ok := itemMap["deepEquals"]; ok {
+			pred.DeepEquals = deepEquals
+		}
+		if contains, ok := itemMap["contains"]; ok {
+			pred.Contains = contains
+		}
+		if startsWith, ok := itemMap["startsWith"]; ok {
+			pred.StartsWith = startsWith
+		}
+		if endsWith, ok := itemMap["endsWith"]; ok {
+			pred.EndsWith = endsWith
+		}
+		if matches, ok := itemMap["matches"]; ok {
+			pred.Matches = matches
+		}
+		if exists, ok := itemMap["exists"]; ok {
+			pred.Exists = exists
+		}
+
+		predicates = append(predicates, pred)
+	}
+
+	return predicates, nil
 }
 
 // BuildProxyRequest creates an HTTP request for proxying
