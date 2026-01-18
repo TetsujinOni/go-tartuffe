@@ -165,6 +165,36 @@ func (r *InMemory) ClearRequests(port int) error {
 	return nil
 }
 
+// ClearRequestsAndProxyStubs clears requests and removes proxy-generated stubs
+func (r *InMemory) ClearRequestsAndProxyStubs(port int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	imp, ok := r.imposters[port]
+	if !ok {
+		return ErrNotFound{Port: port}
+	}
+
+	// Clear requests
+	imp.Requests = nil
+	imp.TCPRequests = nil
+	imp.SMTPRequests = nil
+	imp.GRPCRequests = nil
+	count := 0
+	imp.NumberOfRequests = &count
+
+	// Remove proxy-generated stubs
+	filteredStubs := make([]models.Stub, 0, len(imp.Stubs))
+	for _, stub := range imp.Stubs {
+		if !stub.IsProxyGenerated {
+			filteredStubs = append(filteredStubs, stub)
+		}
+	}
+	imp.Stubs = filteredStubs
+
+	return nil
+}
+
 // AddRequest records a request for an imposter
 func (r *InMemory) AddRequest(port int, req models.Request) error {
 	r.mu.Lock()

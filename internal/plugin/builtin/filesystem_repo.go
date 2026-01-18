@@ -90,6 +90,10 @@ func (f *FilesystemRepositoryPlugin) ClearRequests(port int) error {
 	return f.repo.ClearRequests(port)
 }
 
+func (f *FilesystemRepositoryPlugin) ClearRequestsAndProxyStubs(port int) error {
+	return f.repo.ClearRequestsAndProxyStubs(port)
+}
+
 func (f *FilesystemRepositoryPlugin) AddRequest(port int, req models.Request) error {
 	return f.repo.AddRequest(port, req)
 }

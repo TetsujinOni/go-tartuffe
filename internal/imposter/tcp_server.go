@@ -46,17 +46,23 @@ func (s *TCPServer) Start() error {
 		s.mu.Unlock()
 		return fmt.Errorf("server already started")
 	}
-	s.started = true
-	s.mu.Unlock()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.imposter.Host, s.imposter.Port))
 	if err != nil {
-		s.mu.Lock()
-		s.started = false
 		s.mu.Unlock()
 		return fmt.Errorf("failed to listen on %s:%d: %w", s.imposter.Host, s.imposter.Port, err)
 	}
+
+	// Get the actual port if port=0 was used (auto-assign)
+	if s.imposter.Port == 0 {
+		if tcpAddr, ok := listener.Addr().(*net.TCPAddr); ok {
+			s.imposter.Port = tcpAddr.Port
+		}
+	}
+
 	s.listener = listener
+	s.started = true
+	s.mu.Unlock()
 
 	go s.acceptLoop()
 
@@ -155,7 +161,7 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 
 	// Check for proxy response first
 	if match.RawResponse != nil && match.RawResponse.Proxy != nil {
-		s.handleProxyRequest(conn, data, match.RawResponse.Proxy)
+		s.handleProxyRequest(conn, data, match.RawResponse)
 		return
 	}
 
@@ -277,9 +283,9 @@ func (s *TCPServer) executeTCPDecorate(requestData, responseData, script string)
 }
 
 // handleProxyRequest proxies the TCP request to the origin server
-func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, proxy *models.ProxyResponse) {
+func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, resp *models.Response) {
 	// Parse the target URL
-	targetURL := proxy.To
+	targetURL := resp.Proxy.To
 	// Remove tcp:// prefix if present
 	target := strings.TrimPrefix(targetURL, "tcp://")
 
@@ -307,9 +313,25 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 		return
 	}
 
+	// Apply behaviors if present
+	responseData := string(response[:n])
+	if len(resp.Behaviors) > 0 {
+		// Create a request object for behaviors
+		reqData := string(requestData)
+
+		// Apply behaviors to the proxy response
+		for _, behavior := range resp.Behaviors {
+			// Apply decorate behavior
+			if behavior.Decorate != "" {
+				responseData = s.executeTCPDecorate(reqData, responseData, behavior.Decorate)
+			}
+			// Other behaviors (wait, copy, etc.) can be added here
+		}
+	}
+
 	// Forward response to client
-	if n > 0 {
-		clientConn.Write(response[:n])
+	if len(responseData) > 0 {
+		clientConn.Write([]byte(responseData))
 	}
 }
 

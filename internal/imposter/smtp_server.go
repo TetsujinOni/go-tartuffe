@@ -49,6 +49,13 @@ func (s *SMTPServer) Start() error {
 		return fmt.Errorf("failed to start SMTP server on %s:%d: %w", s.imposter.Host, s.imposter.Port, err)
 	}
 
+	// Get the actual port if port=0 was used (auto-assign)
+	if s.imposter.Port == 0 {
+		if tcpAddr, ok := listener.Addr().(*net.TCPAddr); ok {
+			s.imposter.Port = tcpAddr.Port
+		}
+	}
+
 	s.listener = listener
 	s.started = true
 	s.mu.Unlock()

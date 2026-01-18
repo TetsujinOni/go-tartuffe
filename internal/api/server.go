@@ -136,6 +136,7 @@ func NewServer(cfg ServerConfig) *Server {
 	router.DELETE("/imposters/{id}", imposterHandler.DeleteImposter)
 
 	// Imposter requests/proxies
+	router.DELETE("/imposters/{id}/requests", imposterHandler.DeleteRequests)
 	router.DELETE("/imposters/{id}/savedRequests", imposterHandler.ResetRequests)
 	router.DELETE("/imposters/{id}/savedProxyResponses", imposterHandler.ResetRequests) // Same handler
 

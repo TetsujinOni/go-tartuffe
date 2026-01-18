@@ -59,14 +59,15 @@ func TestBehaviorUnmarshalSingleObject(t *testing.T) {
 			}`,
 			wantErr: false,
 			validate: func(t *testing.T, r *Response) {
+				// repeat is promoted to response level, not kept in behaviors
+				if r.Repeat != 2 {
+					t.Errorf("expected response.repeat=2, got %d", r.Repeat)
+				}
 				if len(r.Behaviors) != 1 {
 					t.Errorf("expected 1 behavior, got %d", len(r.Behaviors))
 				}
 				if r.Behaviors[0].Wait == nil {
 					t.Error("expected wait to be set")
-				}
-				if r.Behaviors[0].Repeat != 2 {
-					t.Errorf("expected repeat=2, got %d", r.Behaviors[0].Repeat)
 				}
 			},
 		},

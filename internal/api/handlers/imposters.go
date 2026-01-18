@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/imposter"
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
@@ -62,14 +63,14 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Validate port
-	if imp.Port <= 0 || imp.Port > 65535 {
+	// Validate port (port=0 or missing means auto-assign, negative is invalid, >65535 is invalid)
+	if imp.Port < 0 || imp.Port > 65535 {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData, "'port' must be a valid port number")
 		return
 	}
 
-	// Check if port conflicts with API server
-	if imp.Port == h.apiPort {
+	// Check if port conflicts with API server (skip for auto-assign port=0)
+	if imp.Port != 0 && imp.Port == h.apiPort {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
 			"port "+strconv.Itoa(imp.Port)+" is already in use")
 		return
@@ -93,13 +94,69 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		imp.NumberOfRequests = &count
 	}
 
+	// For TCP imposters, set defaults and validate
+	if imp.Protocol == "tcp" {
+		// Set default mode to "text" if not specified
+		if imp.Mode == "" {
+			imp.Mode = "text"
+		}
+
+		// Initialize requests array if nil (for API response consistency)
+		if imp.Requests == nil {
+			imp.Requests = []models.Request{}
+		}
+
+		// Validate matches predicate is not used in binary mode
+		if imp.Mode == "binary" {
+			for _, stub := range imp.Stubs {
+				for _, pred := range stub.Predicates {
+					if pred.Matches != nil {
+						response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData,
+							"the matches predicate is not allowed in binary mode")
+						return
+					}
+				}
+			}
+		}
+
+		// Validate proxy responses use TCP protocol
+		for _, stub := range imp.Stubs {
+			for _, resp := range stub.Responses {
+				if resp.Proxy != nil && resp.Proxy.To != "" {
+					// Validate that proxy.to uses tcp:// protocol
+					proxyURL := resp.Proxy.To
+					if !strings.HasPrefix(proxyURL, "tcp://") {
+						response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData,
+							"cannot proxy to "+proxyURL+" using tcp protocol")
+						return
+					}
+				}
+			}
+		}
+	}
+
 	// For HTTPS imposters, extract certificate metadata
 	if imp.Protocol == "https" {
 		imp.ExtractCertMetadata()
 	}
 
-	// Add to repository
+	// Start the imposter server first (HTTP, HTTPS, TCP, or SMTP)
+	// This must happen before adding to repository so that auto-assigned port (port=0) is resolved
+	if (imp.Protocol == "http" || imp.Protocol == "https" || imp.Protocol == "tcp" || imp.Protocol == "smtp") && h.manager != nil {
+		if err := h.manager.Start(&imp); err != nil {
+			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
+				"cannot start server: "+err.Error())
+			return
+		}
+	}
+
+	// Now imp.Port has the actual port (auto-assigned if it was 0)
+	// Add to repository with the actual port
 	if err := h.repo.Add(&imp); err != nil {
+		// Failed to add to repository, stop the server we just started
+		if h.manager != nil {
+			h.manager.Stop(imp.Port)
+		}
 		if _, ok := err.(repository.ErrConflict); ok {
 			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
 				"port "+strconv.Itoa(imp.Port)+" is already in use")
@@ -107,17 +164,6 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		}
 		response.WriteError(w, http.StatusInternalServerError, response.ErrCodeBadData, err.Error())
 		return
-	}
-
-	// Start the imposter server (HTTP, HTTPS, TCP, or SMTP)
-	if (imp.Protocol == "http" || imp.Protocol == "https" || imp.Protocol == "tcp" || imp.Protocol == "smtp") && h.manager != nil {
-		if err := h.manager.Start(&imp); err != nil {
-			// Failed to start server, remove from repository
-			h.repo.Delete(imp.Port)
-			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
-				"cannot start server on port "+strconv.Itoa(imp.Port)+": "+err.Error())
-			return
-		}
 	}
 
 	// Add location header

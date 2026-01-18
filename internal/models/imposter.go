@@ -119,6 +119,39 @@ func (imp *Imposter) ExtractCertMetadata() {
 	imp.ValidTo = cert.NotAfter.UTC().Format(time.RFC3339)
 }
 
+// MarshalJSON implements custom JSON marshaling to ensure requests and stubs arrays are always present
+func (imp *Imposter) MarshalJSON() ([]byte, error) {
+	// Create an alias type to avoid infinite recursion
+	type ImposterAlias Imposter
+
+	// Create a map to manually control serialization
+	data := make(map[string]interface{})
+
+	// Marshal the imposter using the alias type
+	aliasBytes, err := json.Marshal((*ImposterAlias)(imp))
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal into map
+	if err := json.Unmarshal(aliasBytes, &data); err != nil {
+		return nil, err
+	}
+
+	// Ensure stubs array is always present (even if empty)
+	if _, ok := data["stubs"]; !ok {
+		data["stubs"] = []interface{}{}
+	}
+
+	// Ensure requests array is always present (even if empty)
+	if _, ok := data["requests"]; !ok {
+		data["requests"] = []interface{}{}
+	}
+
+	// Marshal the modified map
+	return json.Marshal(data)
+}
+
 // ToJSON serializes the imposter with options
 func (imp *Imposter) ToJSON(options SerializeOptions) ([]byte, error) {
 	// Create a copy for serialization
@@ -169,5 +202,6 @@ func itoa(i int) string {
 
 // MarshalBody marshals a body value to JSON bytes
 func MarshalBody(body interface{}) ([]byte, error) {
-	return json.Marshal(body)
+	// Use MarshalIndent to match mountebank's pretty-printed JSON format
+	return json.MarshalIndent(body, "", "    ")
 }

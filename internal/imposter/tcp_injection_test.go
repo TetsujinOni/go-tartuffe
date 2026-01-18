@@ -141,7 +141,8 @@ func TestTCPResponseInjection(t *testing.T) {
 			name: "echo request data",
 			inject: `function(request, state, logger) {
 				// Trim newline from request data
-				var trimmed = request.data.replace(/\n$/, '');
+				// Buffer.toString() gives us a string, then we can use replace()
+				var trimmed = request.data.toString().replace(/\n$/, '');
 				return { data: 'ECHO: ' + trimmed };
 			}`,
 			requestData:  "TEST",
@@ -151,7 +152,8 @@ func TestTCPResponseInjection(t *testing.T) {
 			name: "transform request",
 			inject: `function(request, state, logger) {
 				// Trim newline before transforming
-				var trimmed = request.data.replace(/\n$/, '');
+				// Buffer.toString() gives us a string, then we can use replace()
+				var trimmed = request.data.toString().replace(/\n$/, '');
 				return { data: trimmed.toUpperCase() };
 			}`,
 			requestData:  "lowercase",
@@ -234,9 +236,10 @@ func TestTCPInjectionWithBinaryMode(t *testing.T) {
 				Predicates: []models.Predicate{
 					{
 						Inject: `function(request, logger) {
-							// In binary mode, request.data is base64 encoded
-							// Decode and check for specific bytes
-							return request.data.indexOf('AQI=') >= 0; // Base64 for [0x01, 0x02]
+							// In binary mode, request.data is a Buffer containing base64-encoded data
+							// Use toString() to get the base64 string, then check for specific pattern
+							// Base64 for [0x01, 0x02] is 'AQI='
+							return request.data.toString().indexOf('AQI=') >= 0;
 						}`,
 					},
 				},
@@ -431,8 +434,9 @@ func TestTCPMultipleInjectionsInStub(t *testing.T) {
 					},
 					{
 						// Second predicate checks content
+						// Buffer.indexOf takes a byte value, so use toString() for string search
 						Inject: `function(request, logger) {
-							return request.data.indexOf('TEST') >= 0;
+							return request.data.toString().indexOf('TEST') >= 0;
 						}`,
 					},
 				},

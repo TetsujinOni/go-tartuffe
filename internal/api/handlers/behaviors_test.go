@@ -101,12 +101,16 @@ func TestCreateImposterWithBehaviorsObject(t *testing.T) {
 				if err := json.Unmarshal(rec.Body.Bytes(), &imp); err != nil {
 					t.Fatalf("failed to unmarshal response: %v", err)
 				}
-				behavior := imp.Stubs[0].Responses[0].Behaviors[0]
-				if behavior.Wait == nil {
-					t.Error("expected wait to be set")
+				resp := imp.Stubs[0].Responses[0]
+				// repeat is promoted to the response level, not kept in behaviors
+				if resp.Repeat != 2 {
+					t.Errorf("expected response.repeat=2, got %d", resp.Repeat)
 				}
-				if behavior.Repeat != 2 {
-					t.Errorf("expected repeat=2, got %d", behavior.Repeat)
+				if len(resp.Behaviors) != 1 {
+					t.Fatalf("expected 1 behavior, got %d", len(resp.Behaviors))
+				}
+				if resp.Behaviors[0].Wait == nil {
+					t.Error("expected wait to be set")
 				}
 			},
 		},

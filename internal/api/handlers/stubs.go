@@ -65,11 +65,27 @@ func (h *StubsHandler) AddStub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// First decode into a generic map to check for required fields
+	var raw map[string]interface{}
+	body := r.Body
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
+		return
+	}
+
+	// Check that 'stub' field is present
+	if _, ok := raw["stub"]; !ok {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData, "must contain 'stub' field")
+		return
+	}
+
+	// Now decode the structured data
+	rawBytes, _ := json.Marshal(raw)
 	var req struct {
 		Stub  models.Stub `json:"stub"`
 		Index *int        `json:"index,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := json.Unmarshal(rawBytes, &req); err != nil {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}

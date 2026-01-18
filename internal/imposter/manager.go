@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -53,18 +54,20 @@ func (m *Manager) Start(imp *models.Imposter) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if port is already in use
-	if _, exists := m.servers[imp.Port]; exists {
-		return fmt.Errorf("server already running on port %d", imp.Port)
-	}
-	if _, exists := m.tcpServers[imp.Port]; exists {
-		return fmt.Errorf("server already running on port %d", imp.Port)
-	}
-	if _, exists := m.smtpServers[imp.Port]; exists {
-		return fmt.Errorf("server already running on port %d", imp.Port)
-	}
-	if _, exists := m.grpcServers[imp.Port]; exists {
-		return fmt.Errorf("server already running on port %d", imp.Port)
+	// Check if port is already in use (skip check for port=0 which means auto-assign)
+	if imp.Port != 0 {
+		if _, exists := m.servers[imp.Port]; exists {
+			return fmt.Errorf("server already running on port %d", imp.Port)
+		}
+		if _, exists := m.tcpServers[imp.Port]; exists {
+			return fmt.Errorf("server already running on port %d", imp.Port)
+		}
+		if _, exists := m.smtpServers[imp.Port]; exists {
+			return fmt.Errorf("server already running on port %d", imp.Port)
+		}
+		if _, exists := m.grpcServers[imp.Port]; exists {
+			return fmt.Errorf("server already running on port %d", imp.Port)
+		}
 	}
 
 	// Start appropriate server based on protocol
@@ -89,11 +92,21 @@ func (m *Manager) startHTTPServer(imp *models.Imposter) error {
 		return err
 	}
 
+	// Save original port in case it's 0 (auto-assign)
+	originalPort := imp.Port
+
 	if err := srv.Start(); err != nil {
 		return err
 	}
 
-	m.servers[imp.Port] = srv
+	// If port was 0, it's now updated to the actual assigned port
+	// Use the actual port for the server map
+	actualPort := imp.Port
+	if originalPort == 0 && actualPort != 0 {
+		// Port was auto-assigned - use the new port
+	}
+
+	m.servers[actualPort] = srv
 	return nil
 }
 
@@ -108,6 +121,7 @@ func (m *Manager) startHTTPSServer(imp *models.Imposter) error {
 		return err
 	}
 
+	// imp.Port is now the actual port (updated if was 0)
 	m.servers[imp.Port] = srv
 	return nil
 }
@@ -324,10 +338,12 @@ func (m *Manager) GetImposterServer(port int) ImposterServer {
 type Server struct {
 	imposter         *models.Imposter
 	httpServer       *http.Server
+	listener         net.Listener // Store the listener to get actual port
 	matcher          *Matcher
 	proxyHandler     *ProxyHandler
 	jsEngine         *JSEngine
 	behaviorExecutor *BehaviorExecutor
+	imposterState    map[string]interface{} // Shared state for JS injection
 	tlsConfig        *tls.Config
 	useTLS           bool
 	started          bool
@@ -336,13 +352,22 @@ type Server struct {
 
 // NewServer creates a new imposter server (HTTP or HTTPS based on useTLS flag)
 func NewServer(imp *models.Imposter, useTLS bool) (*Server, error) {
-	jsEngine := NewJSEngine()
+	// Create shared state that will be used by both matcher and response injection
+	imposterState := make(map[string]interface{})
+
+	matcher := NewMatcher(imp)
+	matcher.SetState(imposterState) // Share state with matcher
+
+	// Use the matcher's JS engine for consistency
+	jsEngine := matcher.GetJSEngine()
+
 	srv := &Server{
 		imposter:         imp,
-		matcher:          NewMatcher(imp),
+		matcher:          matcher,
 		proxyHandler:     NewProxyHandler(),
 		jsEngine:         jsEngine,
 		behaviorExecutor: NewBehaviorExecutor(jsEngine),
+		imposterState:    imposterState,
 		useTLS:           useTLS,
 	}
 
@@ -479,18 +504,39 @@ func (s *Server) Start() error {
 		s.mu.Unlock()
 		return fmt.Errorf("server already started")
 	}
+
+	// Create listener first to support port=0 (auto-assign)
+	addr := fmt.Sprintf("%s:%d", s.imposter.Host, s.imposter.Port)
+	var listener net.Listener
+	var err error
+
+	if s.useTLS {
+		listener, err = tls.Listen("tcp", addr, s.tlsConfig)
+	} else {
+		listener, err = net.Listen("tcp", addr)
+	}
+	if err != nil {
+		s.mu.Unlock()
+		return fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+
+	// Get the actual port if port=0 was used (auto-assign)
+	if s.imposter.Port == 0 {
+		if tcpAddr, ok := listener.Addr().(*net.TCPAddr); ok {
+			s.imposter.Port = tcpAddr.Port
+			// Update the server address too
+			s.httpServer.Addr = fmt.Sprintf("%s:%d", s.imposter.Host, s.imposter.Port)
+		}
+	}
+
+	s.listener = listener
 	s.started = true
 	s.mu.Unlock()
 
 	go func() {
 		var err error
-		if s.useTLS {
-			// Start HTTPS server - use ListenAndServeTLS with empty strings
-			// since TLSConfig is already set with the certificate
-			err = s.httpServer.ListenAndServeTLS("", "")
-		} else {
-			err = s.httpServer.ListenAndServe()
-		}
+		// Serve on the existing listener
+		err = s.httpServer.Serve(listener)
 		if err != nil && err != http.ErrServerClosed {
 			// Log error but don't crash
 			fmt.Printf("imposter server error on port %d: %v\n", s.imposter.Port, err)
@@ -574,6 +620,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var resp *models.IsResponse
 
 	// Handle different response types
+	var proxyStubToRecord *models.Stub
 	if match.Proxy != nil {
 		// Handle proxy response
 		proxyResult, err := s.proxyHandler.Execute(req, match.Proxy, r)
@@ -584,13 +631,20 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		resp = proxyResult.Response
 
-		// Record generated stub if needed
+		// Remove Content-Length from proxy responses - it may be stale after JSON re-marshaling
+		// The HTTP server will recalculate it based on the actual body size
+		if resp != nil && resp.Headers != nil {
+			delete(resp.Headers, "Content-Length")
+			delete(resp.Headers, "content-length")
+		}
+
+		// Save stub for recording after behaviors are applied
 		if proxyResult.ShouldRecord && proxyResult.GeneratedStub != nil {
-			s.recordProxyStub(match, proxyResult.GeneratedStub)
+			proxyStubToRecord = proxyResult.GeneratedStub
 		}
 	} else if match.Inject != "" {
-		// Handle inject response
-		injResp, err := s.jsEngine.ExecuteResponse(match.Inject, req)
+		// Handle inject response with shared imposter state
+		injResp, err := s.jsEngine.ExecuteResponse(match.Inject, req, s.imposterState)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("inject error: %v", err), http.StatusInternalServerError)
 			return
@@ -609,6 +663,22 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("behavior error: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		// Remove Content-Length header after behaviors - it may be stale if body was modified
+		// The HTTP server will recalculate it based on the actual body size
+		if resp.Headers != nil {
+			delete(resp.Headers, "Content-Length")
+			delete(resp.Headers, "content-length")
+		}
+	}
+
+	// Record proxy stub AFTER behaviors are applied (so decorated response is saved)
+	if proxyStubToRecord != nil {
+		// Update stub with the post-behavior response
+		if len(proxyStubToRecord.Responses) > 0 {
+			proxyStubToRecord.Responses[0].Is = resp
+		}
+		s.recordProxyStub(match, proxyStubToRecord)
 	}
 
 	// Merge with defaultResponse if configured
@@ -708,10 +778,31 @@ func (s *Server) handleFault(w http.ResponseWriter, fault string) {
 	}
 }
 
+// predicatesEqual compares two predicate slices for equality
+func predicatesEqual(p1, p2 []models.Predicate) bool {
+	if len(p1) != len(p2) {
+		return false
+	}
+
+	// For now, we compare predicates by their JSON representation
+	// This is sufficient for matching predicates generated from the same template
+	p1JSON, err1 := json.Marshal(p1)
+	p2JSON, err2 := json.Marshal(p2)
+
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	return string(p1JSON) == string(p2JSON)
+}
+
 // recordProxyStub records a stub generated by proxy
 func (s *Server) recordProxyStub(match *MatchResult, newStub *models.Stub) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// Mark stub as proxy-generated (for DELETE /requests cleanup)
+	newStub.IsProxyGenerated = true
 
 	// Get proxy mode
 	mode := "proxyOnce"
@@ -734,14 +825,29 @@ func (s *Server) recordProxyStub(match *MatchResult, newStub *models.Stub) {
 			s.imposter.Stubs = append([]models.Stub{*newStub}, s.imposter.Stubs...)
 		}
 	case "proxyAlways":
-		// Insert at the end of the stub list (before proxy stub is still matched)
-		if match.StubIndex >= 0 && match.StubIndex < len(s.imposter.Stubs) {
-			stubs := make([]models.Stub, 0, len(s.imposter.Stubs)+1)
-			stubs = append(stubs, s.imposter.Stubs[:match.StubIndex]...)
-			stubs = append(stubs, *newStub)
-			stubs = append(stubs, s.imposter.Stubs[match.StubIndex:]...)
-			s.imposter.Stubs = stubs
-		} else {
+		// For proxyAlways, group responses with matching predicates
+		// Find if there's already a stub with the same predicates
+		foundMatch := false
+		for i := range s.imposter.Stubs {
+			// Skip the proxy stub itself
+			if i == match.StubIndex {
+				continue
+			}
+
+			// Check if predicates match
+			if predicatesEqual(s.imposter.Stubs[i].Predicates, newStub.Predicates) {
+				// Append the new response to the existing stub
+				s.imposter.Stubs[i].Responses = append(s.imposter.Stubs[i].Responses, newStub.Responses...)
+				// Mark this stub as proxy-generated since we're adding proxy responses to it
+				s.imposter.Stubs[i].IsProxyGenerated = true
+				foundMatch = true
+				break
+			}
+		}
+
+		// If no matching stub found, create a new one at the END
+		// This maintains insertion order and ensures proxy stub stays first
+		if !foundMatch {
 			s.imposter.Stubs = append(s.imposter.Stubs, *newStub)
 		}
 	}
@@ -793,15 +899,9 @@ func (s *Server) writeResponse(w http.ResponseWriter, resp *models.IsResponse) {
 		}
 	}
 
-	// Set content-type if not set and we have a body
-	if w.Header().Get("Content-Type") == "" && resp != nil && resp.Body != nil {
-		// Default to text/plain for string bodies, application/json for objects
-		switch resp.Body.(type) {
-		case string, []byte:
-			w.Header().Set("Content-Type", "text/plain")
-		default:
-			w.Header().Set("Content-Type", "application/json")
-		}
+	// Set Connection: close if not already set (mountebank default behavior)
+	if w.Header().Get("Connection") == "" {
+		w.Header().Set("Connection", "close")
 	}
 
 	w.WriteHeader(statusCode)

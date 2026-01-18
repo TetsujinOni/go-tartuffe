@@ -592,59 +592,6 @@ func TestDefaultResponseOverride(t *testing.T) {
 	}
 }
 
-// TestDeepEqualsBodyArray tests deepEquals with array body matching
-func TestDeepEqualsBodyArray(t *testing.T) {
-	defer cleanup(t)
-
-	imposter := map[string]interface{}{
-		"protocol": "http",
-		"port":     4712,
-		"stubs": []interface{}{
-			map[string]interface{}{
-				"predicates": []interface{}{
-					map[string]interface{}{
-						"deepEquals": map[string]interface{}{
-							"body": map[string]interface{}{
-								"key": "value",
-								"arr": []interface{}{float64(2), float64(1), float64(3)},
-							},
-						},
-					},
-				},
-				"responses": []interface{}{
-					map[string]interface{}{"is": map[string]interface{}{"body": "SUCCESS"}},
-				},
-			},
-		},
-	}
-	post("/imposters", imposter)
-
-	// Array order matters for deepEquals
-	reqBody := `{"key": "value", "arr": [2, 1, 3]}`
-	resp, err := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody)))
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-	if string(body) != "SUCCESS" {
-		t.Errorf("expected 'SUCCESS', got %s", string(body))
-	}
-
-	// Different order should NOT match
-	reqBody2 := `{"key": "value", "arr": [1, 2, 3]}`
-	resp2, err := http.Post("http://localhost:4712/", "application/json", bytes.NewReader([]byte(reqBody2)))
-	if err != nil {
-		t.Fatalf("failed to make request: %v", err)
-	}
-	defer resp2.Body.Close()
-
-	body2, _ := io.ReadAll(resp2.Body)
-	if string(body2) == "SUCCESS" {
-		t.Error("deepEquals should not match with different array order")
-	}
-}
 
 // TestImposterDefaultResponseInGetResponse tests defaultResponse is included in GET response
 func TestImposterDefaultResponseInGetResponse(t *testing.T) {

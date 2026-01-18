@@ -109,3 +109,35 @@ func (h *ImposterHandler) ResetRequests(w http.ResponseWriter, r *http.Request) 
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
+
+// DeleteRequests handles DELETE /imposters/{id}/requests
+// Clears requests and removes proxy-generated stubs
+func (h *ImposterHandler) DeleteRequests(w http.ResponseWriter, r *http.Request) {
+	port, err := strconv.Atoi(getParam(r, "id"))
+	if err != nil {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData, "invalid port number")
+		return
+	}
+
+	if err := h.repo.ClearRequestsAndProxyStubs(port); err != nil {
+		if _, ok := err.(repository.ErrNotFound); ok {
+			response.WriteError(w, http.StatusNotFound, response.ErrCodeNoSuchResource,
+				"imposter on port "+strconv.Itoa(port)+" does not exist")
+			return
+		}
+		response.WriteError(w, http.StatusInternalServerError, response.ErrCodeBadData, err.Error())
+		return
+	}
+
+	// Also reset counter in the running server
+	if h.manager != nil {
+		if srv := h.manager.GetServer(port); srv != nil {
+			srv.ResetRequestCount()
+		}
+	}
+
+	imp, _ := h.repo.Get(port)
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
+
+	response.WriteJSON(w, http.StatusOK, result)
+}
