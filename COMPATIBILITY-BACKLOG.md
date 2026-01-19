@@ -4,38 +4,42 @@ Remaining work to improve mountebank API compatibility.
 
 ## Current Status
 
-**Progress**: 216/252 passing (85.7%) | 216/237 adjusted (91.1%) ✅ **TARGET EXCEEDED**
+**Progress**: 219/252 passing (86.9%) | 219/239 adjusted (91.6%) ✅ **TARGET EXCEEDED**
 **Target**: 75%+ compatibility
 **Last Validation**: 2026-01-19
 
-## Remaining Failures: 36 Tests
+## Remaining Failures: 33 Tests
 
 **Breakdown**:
-- Actionable: 21 tests (see below)
-- Security/Architectural (Won't Fix): 14 tests
-- Deliberate Design Difference: 1 test
+- Actionable: 20 tests (see below)
+- Security/Architectural (Won't Fix): 9 tests
+- goja Async Limitation: 4 tests
 
 **Test Mapping**: See [docs/MOUNTEBANK-TEST-MAPPING.md](docs/MOUNTEBANK-TEST-MAPPING.md) for complete analysis.
 
-## Actionable Failures by Priority
+## Recently Completed
 
-### P0 - Critical (2 tests)
-
-#### TCP endOfRequestResolver (2 tests)
-- **Status**: Model exists, not implemented
-- **Tests**:
+### TCP endOfRequestResolver (2 tests) - DONE ✅
+- **Implemented**: 2026-01-19
+- **Tests now passing**:
   - `should allow binary requests extending beyond a single packet using endOfRequestResolver`
   - `should allow text requests extending beyond a single packet using endOfRequestResolver`
-- **File**: `mbTest/api/tcp/tcpImposterTest.js`
-- **Work**: Implement custom request boundary detection in TCP server
-- **Files**: `internal/imposter/tcp_server.go`
+- **Implementation**:
+  - `internal/imposter/inject.go`: `ExecuteEndOfRequestResolver()` with binary/text mode support
+  - `internal/imposter/tcp_server.go`: `readRequest()` buffers multiple packets until resolver returns true
+  - `internal/models/imposter.go`: JSON serialization fixed to use "requests" field consistently
 
-### P1 - High Priority (11 tests)
+## Actionable Failures by Priority
 
-#### HTTP Proxy Features (2 tests)
+### P1 - High Priority (13 tests)
+
+#### HTTP Proxy Features (5 tests)
 - **Tests**:
   - `should proxy to https` - Cross-protocol proxying (HTTP→HTTPS)
   - `should allow proxy stubs to invalid domains` - DNS error handling
+  - `should handle the connect method` - CONNECT method support
+  - `should persist behaviors from origin server` - Behavior persistence
+  - `should support adding latency to saved responses...` - addWaitBehavior
 - **File**: `mbTest/api/http/httpProxyStubTest.js`
 - **Files**: `internal/imposter/proxy.go`
 
@@ -46,78 +50,49 @@ Remaining work to improve mountebank API compatibility.
 - **File**: `mbTest/api/https/httpsCertificateTest.js`
 - **Files**: `internal/imposter/http_server.go`
 
-#### TCP Implementation (7 tests)
+#### TCP Proxy/Features (6 tests)
 - **Tests**:
-  - `should provide access to all requests` - TCP request recording
-  - `should split each packet into a separate request by default` - Packet splitting logic
+  - `should obey endOfRequestResolver` - endOfRequestResolver in proxy mode
+  - `should gracefully deal with DNS errors`
+  - `should gracefully deal with non listening ports`
+  - `should reject non-tcp protocols` - Protocol validation
   - `should allow proxy stubs to invalid hosts` - Error handling
-  - **TCP Proxy** (4 tests):
-    - `should obey endOfRequestResolver` - endOfRequestResolver in proxy mode
-    - `should gracefully deal with DNS errors`
-    - `should gracefully deal with non listening ports`
-    - `should reject non-tcp protocols` - Protocol validation
+  - `should split each packet into a separate request by default` - Packet splitting
 - **Files**: `mbTest/api/tcp/*.js`
-- **Work**: Implement TCP proxy forwarding, error handling, packet splitting
-- **Files**: `internal/imposter/tcp_server.go`, TCP proxy handler
+- **Files**: `internal/imposter/tcp_server.go`
 
-### P2 - Medium Priority (8 tests)
+### P2 - Medium Priority (7 tests)
 
-#### HTTP Behavior Composition (2 tests)
+#### HTTP/HTTPS Behavior Composition (4 tests)
 - **Tests**:
-  - `should compose multiple behaviors together (old interface for backwards compatibility)`
-  - `should apply multiple behaviors in sequence with repeat (new format)`
-- **File**: `mbTest/api/http/httpBehaviorsTest.js`
-- **Work**: Implement repeat behavior, fix behavior composition
+  - `should compose multiple behaviors together (old interface for backwards compatibility)` (HTTP + HTTPS)
+  - `should apply multiple behaviors in sequence with repeat (new format)` (HTTP + HTTPS)
+- **File**: `mbTest/api/http/httpBehaviorsTest.js`, `mbTest/api/https/httpsBehaviorsTest.js`
+- **Work**: Fix behavior composition with shellTransform fallback, implement repeat behavior
 - **Files**: `internal/imposter/behaviors.go`
 
-#### HTTP Proxy Advanced Features (3 tests)
-- **Tests**:
-  - `should handle the connect method` - CONNECT method support
-  - `should persist behaviors from origin server` - Behavior persistence
-  - `should support adding latency to saved responses...` - addWaitBehavior
-- **File**: `mbTest/api/http/httpProxyStubTest.js`
-- **Work**: CONNECT tunneling, behavior persistence, latency tracking
-- **Files**: `internal/imposter/proxy.go`
-
-#### HTTP Fault Handling (2 tests)
+#### HTTP/HTTPS Fault Handling (2 tests)
 - **Tests**: `should do nothing when undefined fault is specified` (HTTP + HTTPS)
 - **Files**: `mbTest/api/http/httpFaultTest.js`, `mbTest/api/https/httpsFaultTest.js`
-- **Work**: Gracefully handle unknown fault types
+- **Work**: Gracefully handle unknown fault types (return normal response instead of error)
 
-#### HTTP Injection (1 test)
-- **Test**: `should provide access to all requests` - Requests array in injection context
-- **File**: `mbTest/api/http/httpInjectionTest.js`
-- **Work**: Pass requests array to JavaScript injection functions
-- **Files**: `internal/imposter/inject.go`
+#### SMTP Request Recording (1 test)
+- **Test**: `should provide access to all requests`
+- **File**: `mbTest/api/smtp/smtpImposterTest.js`
+- **Work**: Verify SMTP request recording and JSON format
 
-### P3 - Low Priority (3 tests)
+## Won't Fix (Security/Architectural - 9 tests)
 
-#### Async JavaScript (3 tests)
-- **Tests**:
-  - `should allow asynchronous injection` (HTTP injection)
-  - `should allow asynchronous injection (old interface)` (TCP injection)
-  - `should allow asynchronous injection` (TCP injection)
-- **Status**: goja ES5.1 limitation - no native Promise/async support
-- **Work**: May require upstream goja enhancement or workarounds
-- **Priority**: Low - rarely used feature
-
-## Won't Fix (Security/Architectural - 14 tests)
-
-### shellTransform Behavior (8 tests)
+### shellTransform Behavior (4 tests)
 - **Reason**: Arbitrary command execution security risk
-- **Tests**: 4 HTTP + 4 HTTPS behavior tests
+- **Tests**: 2 HTTP + 2 HTTPS shell transform tests
 - **Alternative**: Use `decorate` behavior with sandboxed JavaScript
 - **Reference**: `docs/SECURITY.md`
 
 ### Process Object Access (2 tests)
 - **Reason**: Environment variable exposure security risk
-- **Tests**: HTTP + HTTPS injection tests
+- **Tests**: HTTP + HTTPS injection tests accessing `process.env`
 - **Decision**: Security sandbox is priority over compatibility
-
-### Private Key Return (1 test)
-- **Reason**: Security hardening - keys could be logged/exposed
-- **Test**: HTTPS key/cert pair creation test
-- **Decision**: Never return private keys in API responses
 
 ### HTTP Proxy Replayable Export (1 test)
 - **Test**: `should support retrieving replayable JSON with proxies removed for later playback`
@@ -133,13 +108,17 @@ Remaining work to improve mountebank API compatibility.
 - **Test**: `should compose multiple behaviors together`
 - **Status**: Low priority TCP-specific edge case
 
-## Deliberate Design Difference (1 test)
+## goja Async Limitation (4 tests)
 
-### Prometheus Metrics Format
-- **Test**: Metrics-related test in `mbTest/api/http/httpMetricsTest.js`
-- **Reason**: Industry-standard Prometheus format vs. mountebank custom JSON
-- **Benefits**: Native scraping, better performance, wider tooling compatibility
-- **Decision**: Modern observability standard over legacy format
+### Async JavaScript Injection
+- **Tests**:
+  - `should allow asynchronous injection` (HTTP)
+  - `should allow asynchronous injection` (HTTPS)
+  - `should allow asynchronous injection (old interface)` (TCP)
+  - `should allow asynchronous injection` (TCP)
+- **Status**: goja ES5.1 limitation - no native Promise/async support
+- **Work**: May require upstream goja enhancement or workarounds
+- **Priority**: Low - rarely used feature
 
 ## Validation Procedure
 
@@ -150,10 +129,11 @@ See `.claude/claude.md` for complete validation workflow.
 ```bash
 cd /home/tetsujinoni/work/mountebank
 pkill -f tartuffe 2>/dev/null || true
-MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
+MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api 2>&1 | tee /tmp/tartuffe-validation.log
+grep -E "passing|failing" /tmp/tartuffe-validation.log | tail -3
 ```
 
-Expected: ~215 passing / 37 failing (85.3%)
+Expected: 219 passing / 33 failing (86.9%)
 
 ## Documentation References
 
