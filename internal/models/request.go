@@ -14,17 +14,17 @@ import (
 
 // Request represents a simplified HTTP request for matching
 type Request struct {
-	RequestFrom  string            `json:"requestFrom,omitempty"`
-	Method       string            `json:"method"`
-	Path         string            `json:"path"`
-	Query        map[string]string `json:"query,omitempty"`
-	RawQuery     string            `json:"-"` // Preserve original query string (not serialized)
-	Headers      map[string]string `json:"headers,omitempty"`
-	Body         string            `json:"body,omitempty"`
-	Form         map[string]string `json:"form,omitempty"`
-	IP           string            `json:"ip,omitempty"`
-	Timestamp    string            `json:"timestamp,omitempty"`
-	Mode         string            `json:"_mode,omitempty"`
+	RequestFrom string            `json:"requestFrom,omitempty"`
+	Method      string            `json:"method"`
+	Path        string            `json:"path"`
+	Query       map[string]string `json:"query,omitempty"`
+	RawQuery    string            `json:"-"` // Preserve original query string (not serialized)
+	Headers     map[string]string `json:"headers,omitempty"`
+	Body        string            `json:"body,omitempty"`
+	Form        map[string]string `json:"form,omitempty"`
+	IP          string            `json:"ip,omitempty"`
+	Timestamp   string            `json:"timestamp,omitempty"`
+	Mode        string            `json:"_mode,omitempty"`
 }
 
 // NewRequestFromHTTP creates a Request from an http.Request

@@ -592,7 +592,6 @@ func TestDefaultResponseOverride(t *testing.T) {
 	}
 }
 
-
 // TestImposterDefaultResponseInGetResponse tests defaultResponse is included in GET response
 func TestImposterDefaultResponseInGetResponse(t *testing.T) {
 	defer cleanup(t)

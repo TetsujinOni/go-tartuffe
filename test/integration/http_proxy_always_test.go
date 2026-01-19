@@ -650,7 +650,7 @@ func TestHTTPProxy_AddDecorateBehavior(t *testing.T) {
 				"responses": []map[string]interface{}{
 					{
 						"proxy": map[string]interface{}{
-							"to":                   fmt.Sprintf("http://localhost:%d", originPort),
+							"to":                  fmt.Sprintf("http://localhost:%d", originPort),
 							"addDecorateBehavior": "function(request, response) { response.body += ' decorated'; }",
 						},
 					},

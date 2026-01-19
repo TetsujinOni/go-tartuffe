@@ -301,6 +301,8 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 	// Forward request to origin
 	if _, err := originConn.Write(requestData); err != nil {
 		log.Printf("[ERROR] TCP proxy write to origin failed: %v", err)
+		mountebankStyleError := `{errors:[{code:'invalid proxy',message:'Cannot resolve "%s"'}]}`
+		clientConn.Write([]byte(fmt.Sprintf(mountebankStyleError, targetURL)))
 		return
 	}
 
