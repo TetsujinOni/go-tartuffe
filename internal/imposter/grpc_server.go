@@ -1,6 +1,8 @@
 package imposter
 
 import (
+	"strconv"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -315,8 +317,8 @@ func (s *GRPCServer) handleBidiStream(ctx context.Context, stream grpc.ServerStr
 		}
 
 		// Check for error status
-		if resp.StatusCode != 0 {
-			return status.Error(codes.Code(resp.StatusCode), resp.StatusMessage)
+		if statusCode := getStatusCodeAsInt(resp); statusCode != 0 {
+			return status.Error(codes.Code(statusCode), resp.StatusMessage)
 		}
 
 		// Send response
@@ -372,7 +374,13 @@ func (s *GRPCServer) recordRequest(ctx context.Context, grpcReq *models.GRPCRequ
 		}
 		s.imposter.GRPCRequests = append(s.imposter.GRPCRequests, *grpcReq)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 }
 
 // applyBehaviors applies behaviors to the response
@@ -431,8 +439,8 @@ func (s *GRPCServer) sendUnaryResponse(stream grpc.ServerStream, method protoref
 	}
 
 	// Check for error status code
-	if resp.StatusCode != 0 {
-		code := codes.Code(resp.StatusCode)
+	if statusCode := getStatusCodeAsInt(resp); statusCode != 0 {
+		code := codes.Code(statusCode)
 		msg := resp.StatusMessage
 		if msg == "" {
 			msg = code.String()
@@ -474,8 +482,8 @@ func (s *GRPCServer) sendStreamingResponse(stream grpc.ServerStream, method prot
 	}
 
 	// Check for error status code
-	if resp.StatusCode != 0 {
-		code := codes.Code(resp.StatusCode)
+	if statusCode := getStatusCodeAsInt(resp); statusCode != 0 {
+		code := codes.Code(statusCode)
 		msg := resp.StatusMessage
 		if msg == "" {
 			msg = code.String()
@@ -560,4 +568,23 @@ func getPeerAddress(ctx context.Context) (string, bool) {
 		return p.Addr.String(), true
 	}
 	return "", false
+}
+
+// getStatusCodeAsInt extracts status code as int from interface{}
+func getStatusCodeAsInt(resp *models.IsResponse) int {
+	if resp == nil || resp.StatusCode == nil {
+		return 0
+	}
+
+	switch v := resp.StatusCode.(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	case string:
+		if code, err := strconv.Atoi(v); err == nil {
+			return code
+		}
+	}
+	return 0
 }

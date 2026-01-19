@@ -25,11 +25,13 @@ type Link struct {
 
 // Home handles GET /
 func Home(w http.ResponseWriter, r *http.Request) {
+	baseURL := buildBaseURL(r)
+
 	resp := HomeResponse{
 		Links: HomeLinks{
-			Imposters: Link{Href: "/imposters"},
-			Config:    Link{Href: "/config"},
-			Logs:      Link{Href: "/logs"},
+			Imposters: Link{Href: baseURL + "/imposters"},
+			Config:    Link{Href: baseURL + "/config"},
+			Logs:      Link{Href: baseURL + "/logs"},
 		},
 	}
 

@@ -32,7 +32,7 @@ func (h *StubsHandler) ReplaceStubs(w http.ResponseWriter, r *http.Request) {
 		Stubs []models.Stub `json:"stubs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *StubsHandler) ReplaceStubs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -65,12 +65,28 @@ func (h *StubsHandler) AddStub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// First decode into a generic map to check for required fields
+	var raw map[string]interface{}
+	body := r.Body
+	if err := json.NewDecoder(body).Decode(&raw); err != nil {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
+		return
+	}
+
+	// Check that 'stub' field is present
+	if _, ok := raw["stub"]; !ok {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData, "must contain 'stub' field")
+		return
+	}
+
+	// Now decode the structured data
+	rawBytes, _ := json.Marshal(raw)
 	var req struct {
 		Stub  models.Stub `json:"stub"`
 		Index *int        `json:"index,omitempty"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+	if err := json.Unmarshal(rawBytes, &req); err != nil {
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -91,7 +107,7 @@ func (h *StubsHandler) AddStub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -112,7 +128,7 @@ func (h *StubsHandler) ReplaceStub(w http.ResponseWriter, r *http.Request) {
 
 	var stub models.Stub
 	if err := json.NewDecoder(r.Body).Decode(&stub); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -139,7 +155,7 @@ func (h *StubsHandler) ReplaceStub(w http.ResponseWriter, r *http.Request) {
 	_ = h.repo.AddStub(port, stub, stubIndex)
 
 	imp, _ = h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }
@@ -174,7 +190,7 @@ func (h *StubsHandler) DeleteStub(w http.ResponseWriter, r *http.Request) {
 	}
 
 	imp, _ := h.repo.Get(port)
-	result := applyOptions(imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 
 	response.WriteJSON(w, http.StatusOK, result)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/imposter"
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
@@ -42,7 +43,7 @@ func (h *ImpostersHandler) GetImposters(w http.ResponseWriter, r *http.Request) 
 	// Apply options to each imposter
 	result := make([]*models.Imposter, len(imposters))
 	for i, imp := range imposters {
-		result[i] = applyOptions(imp, options)
+		result[i] = applyOptionsWithRequest(imp, options, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -52,7 +53,7 @@ func (h *ImpostersHandler) GetImposters(w http.ResponseWriter, r *http.Request) 
 func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request) {
 	var imp models.Imposter
 	if err := json.NewDecoder(r.Body).Decode(&imp); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -62,14 +63,14 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Validate port
-	if imp.Port <= 0 || imp.Port > 65535 {
+	// Validate port (port=0 or missing means auto-assign, negative is invalid, >65535 is invalid)
+	if imp.Port < 0 || imp.Port > 65535 {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData, "'port' must be a valid port number")
 		return
 	}
 
-	// Check if port conflicts with API server
-	if imp.Port == h.apiPort {
+	// Check if port conflicts with API server (skip for auto-assign port=0)
+	if imp.Port != 0 && imp.Port == h.apiPort {
 		response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
 			"port "+strconv.Itoa(imp.Port)+" is already in use")
 		return
@@ -87,13 +88,75 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		imp.Stubs = []models.Stub{}
 	}
 
+	// Initialize request counter
+	if imp.NumberOfRequests == nil {
+		count := 0
+		imp.NumberOfRequests = &count
+	}
+
+	// For TCP imposters, set defaults and validate
+	if imp.Protocol == "tcp" {
+		// Set default mode to "text" if not specified
+		if imp.Mode == "" {
+			imp.Mode = "text"
+		}
+
+		// Initialize requests array if nil (for API response consistency)
+		if imp.Requests == nil {
+			imp.Requests = []models.Request{}
+		}
+
+		// Validate matches predicate is not used in binary mode
+		if imp.Mode == "binary" {
+			for _, stub := range imp.Stubs {
+				for _, pred := range stub.Predicates {
+					if pred.Matches != nil {
+						response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData,
+							"the matches predicate is not allowed in binary mode")
+						return
+					}
+				}
+			}
+		}
+
+		// Validate proxy responses use TCP protocol
+		for _, stub := range imp.Stubs {
+			for _, resp := range stub.Responses {
+				if resp.Proxy != nil && resp.Proxy.To != "" {
+					// Validate that proxy.to uses tcp:// protocol
+					proxyURL := resp.Proxy.To
+					if !strings.HasPrefix(proxyURL, "tcp://") {
+						response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData,
+							"cannot proxy to "+proxyURL+" using tcp protocol")
+						return
+					}
+				}
+			}
+		}
+	}
+
 	// For HTTPS imposters, extract certificate metadata
 	if imp.Protocol == "https" {
 		imp.ExtractCertMetadata()
 	}
 
-	// Add to repository
+	// Start the imposter server first (HTTP, HTTPS, TCP, or SMTP)
+	// This must happen before adding to repository so that auto-assigned port (port=0) is resolved
+	if (imp.Protocol == "http" || imp.Protocol == "https" || imp.Protocol == "tcp" || imp.Protocol == "smtp") && h.manager != nil {
+		if err := h.manager.Start(&imp); err != nil {
+			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
+				"cannot start server: "+err.Error())
+			return
+		}
+	}
+
+	// Now imp.Port has the actual port (auto-assigned if it was 0)
+	// Add to repository with the actual port
 	if err := h.repo.Add(&imp); err != nil {
+		// Failed to add to repository, stop the server we just started
+		if h.manager != nil {
+			h.manager.Stop(imp.Port)
+		}
 		if _, ok := err.(repository.ErrConflict); ok {
 			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
 				"port "+strconv.Itoa(imp.Port)+" is already in use")
@@ -103,22 +166,12 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Start the imposter server (HTTP, HTTPS, TCP, or SMTP)
-	if (imp.Protocol == "http" || imp.Protocol == "https" || imp.Protocol == "tcp" || imp.Protocol == "smtp") && h.manager != nil {
-		if err := h.manager.Start(&imp); err != nil {
-			// Failed to start server, remove from repository
-			h.repo.Delete(imp.Port)
-			response.WriteError(w, http.StatusBadRequest, response.ErrCodeResourceConflict,
-				"cannot start server on port "+strconv.Itoa(imp.Port)+": "+err.Error())
-			return
-		}
-	}
-
 	// Add location header
-	w.Header().Set("Location", "/imposters/"+strconv.Itoa(imp.Port))
+	baseURL := buildBaseURL(r)
+	w.Header().Set("Location", baseURL+"/imposters/"+strconv.Itoa(imp.Port))
 
 	// Return created imposter with links
-	result := applyOptions(&imp, models.SerializeOptions{})
+	result := applyOptionsWithRequest(&imp, models.SerializeOptions{}, r)
 	response.WriteJSON(w, http.StatusCreated, result)
 }
 
@@ -143,7 +196,7 @@ func (h *ImpostersHandler) DeleteImposters(w http.ResponseWriter, r *http.Reques
 
 	result := make([]*models.Imposter, len(imposters))
 	for i, imp := range imposters {
-		result[i] = applyOptions(imp, options)
+		result[i] = applyOptionsWithRequest(imp, options, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -155,7 +208,7 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 		Imposters []models.Imposter `json:"imposters"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+		response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON")
 		return
 	}
 
@@ -190,6 +243,12 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 			imp.Stubs = []models.Stub{}
 		}
 
+		// Initialize request counter
+		if imp.NumberOfRequests == nil {
+			count := 0
+			imp.NumberOfRequests = &count
+		}
+
 		// For HTTPS imposters, extract certificate metadata
 		if imp.Protocol == "https" {
 			imp.ExtractCertMetadata()
@@ -205,7 +264,7 @@ func (h *ImpostersHandler) ReplaceImposters(w http.ResponseWriter, r *http.Reque
 			h.manager.Start(imp)
 		}
 
-		result[i] = applyOptions(imp, models.SerializeOptions{})
+		result[i] = applyOptionsWithRequest(imp, models.SerializeOptions{}, r)
 	}
 
 	response.WriteJSON(w, http.StatusOK, ImpostersResponse{Imposters: result})
@@ -219,20 +278,77 @@ func parseOptions(r *http.Request) models.SerializeOptions {
 	}
 }
 
+// buildBaseURL constructs the base URL from the request
+func buildBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	// Check X-Forwarded-Proto header for proxy scenarios
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+
+	host := r.Host
+	if host == "" {
+		host = "localhost:2525"
+	}
+
+	return scheme + "://" + host
+}
+
 // applyOptions creates a copy of the imposter with options applied
 func applyOptions(imp *models.Imposter, options models.SerializeOptions) *models.Imposter {
+	return applyOptionsWithRequest(imp, options, nil)
+}
+
+// applyOptionsWithRequest creates a copy of the imposter with options applied, using request for absolute URLs
+func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptions, r *http.Request) *models.Imposter {
 	// Create a shallow copy
 	result := *imp
 
-	// Add links
-	result.Links = &models.Links{
-		Self:  &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port)},
-		Stubs: &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port) + "/stubs"},
+	// Build base URL if request is provided
+	baseURL := ""
+	if r != nil {
+		baseURL = buildBaseURL(r)
 	}
 
-	// In replayable mode, exclude requests
+	// In replayable mode, exclude requests, links, and request counter
 	if options.Replayable {
 		result.Requests = nil
+		result.TCPRequests = nil
+		result.SMTPRequests = nil
+		result.GRPCRequests = nil
+		result.Links = nil
+		result.NumberOfRequests = nil
+	} else {
+		// Add links only in non-replayable mode
+		result.Links = &models.Links{
+			Self:  &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port)},
+			Stubs: &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port) + "/stubs"},
+		}
+
+		// Ensure requests array exists in non-replayable mode (even if empty)
+		// This is required for mountebank compatibility
+		// The MarshalJSON will serialize the appropriate field as "requests" for each protocol
+		switch result.Protocol {
+		case "tcp":
+			if result.TCPRequests == nil {
+				result.TCPRequests = []models.TCPRequest{}
+			}
+		case "smtp":
+			if result.SMTPRequests == nil {
+				result.SMTPRequests = []models.SMTPRequest{}
+			}
+		case "grpc":
+			if result.GRPCRequests == nil {
+				result.GRPCRequests = []models.GRPCRequest{}
+			}
+		default:
+			if result.Requests == nil {
+				result.Requests = []models.Request{}
+			}
+		}
 	}
 
 	// Remove proxy responses if requested (but keep stubs with non-proxy responses)
@@ -256,13 +372,13 @@ func applyOptions(imp *models.Imposter, options models.SerializeOptions) *models
 		result.Stubs = filtered
 	}
 
-	// Add links to each stub
-	if len(result.Stubs) > 0 {
+	// Add links to each stub (skip in replayable mode)
+	if !options.Replayable && len(result.Stubs) > 0 {
 		stubsWithLinks := make([]models.Stub, len(result.Stubs))
 		for i, stub := range result.Stubs {
 			stubsWithLinks[i] = stub
 			stubsWithLinks[i].Links = &models.StubLinks{
-				Self: &models.Link{Href: "/imposters/" + strconv.Itoa(imp.Port) + "/stubs/" + strconv.Itoa(i)},
+				Self: &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port) + "/stubs/" + strconv.Itoa(i)},
 			}
 		}
 		result.Stubs = stubsWithLinks

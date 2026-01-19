@@ -83,6 +83,10 @@ func (m *MemoryRepositoryPlugin) ClearRequests(port int) error {
 	return m.repo.ClearRequests(port)
 }
 
+func (m *MemoryRepositoryPlugin) ClearRequestsAndProxyStubs(port int) error {
+	return m.repo.ClearRequestsAndProxyStubs(port)
+}
+
 func (m *MemoryRepositoryPlugin) AddRequest(port int, req models.Request) error {
 	return m.repo.AddRequest(port, req)
 }

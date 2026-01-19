@@ -7,16 +7,16 @@ type SMTPRequest struct {
 	EnvelopeFrom string           `json:"envelopeFrom,omitempty"` // MAIL FROM address
 	EnvelopeTo   []string         `json:"envelopeTo,omitempty"`   // RCPT TO addresses
 	From         *EmailAddress    `json:"from,omitempty"`         // From header
-	To           []EmailAddress   `json:"to,omitempty"`           // To header recipients
-	Cc           []EmailAddress   `json:"cc,omitempty"`           // CC recipients
-	Bcc          []EmailAddress   `json:"bcc,omitempty"`          // BCC recipients
+	To           []EmailAddress   `json:"to"`                     // To header recipients (always include, even if empty)
+	Cc           []EmailAddress   `json:"cc"`                     // CC recipients (always include, even if empty)
+	Bcc          []EmailAddress   `json:"bcc"`                    // BCC recipients (always include, even if empty)
 	Subject      string           `json:"subject,omitempty"`      // Email subject
 	Priority     string           `json:"priority,omitempty"`     // Message priority
-	References   []string         `json:"references,omitempty"`   // Email references
-	InReplyTo    []string         `json:"inReplyTo,omitempty"`    // In-Reply-To values
+	References   []string         `json:"references"`             // Email references (always include, even if empty)
+	InReplyTo    []string         `json:"inReplyTo"`              // In-Reply-To values (always include, even if empty)
 	Text         string           `json:"text,omitempty"`         // Plain text body
 	Html         string           `json:"html,omitempty"`         // HTML body
-	Attachments  []SMTPAttachment `json:"attachments,omitempty"`  // Email attachments
+	Attachments  []SMTPAttachment `json:"attachments"`            // Email attachments (always include, even if empty)
 	Timestamp    string           `json:"timestamp,omitempty"`    // When received
 }
 

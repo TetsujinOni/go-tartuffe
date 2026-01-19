@@ -34,6 +34,9 @@ type Repository interface {
 	// ClearRequests clears recorded requests for an imposter
 	ClearRequests(port int) error
 
+	// ClearRequestsAndProxyStubs clears requests and removes proxy-generated stubs
+	ClearRequestsAndProxyStubs(port int) error
+
 	// AddRequest records a request for an imposter
 	AddRequest(port int, req models.Request) error
 }

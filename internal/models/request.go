@@ -1,6 +1,7 @@
 package models
 
 import (
+	"compress/gzip"
 	"encoding/base64"
 	"io"
 	"mime"
@@ -17,6 +18,7 @@ type Request struct {
 	Method      string            `json:"method"`
 	Path        string            `json:"path"`
 	Query       map[string]string `json:"query,omitempty"`
+	RawQuery    string            `json:"-"` // Preserve original query string (not serialized)
 	Headers     map[string]string `json:"headers,omitempty"`
 	Body        string            `json:"body,omitempty"`
 	Form        map[string]string `json:"form,omitempty"`
@@ -31,7 +33,19 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 	var body string
 	var mode string
 	if r.Body != nil {
-		bodyBytes, err := io.ReadAll(r.Body)
+		var bodyReader io.Reader = r.Body
+
+		// Check for gzip encoding and decompress if needed
+		if r.Header.Get("Content-Encoding") == "gzip" {
+			gzipReader, err := gzip.NewReader(r.Body)
+			if err != nil {
+				return nil, err
+			}
+			defer gzipReader.Close()
+			bodyReader = gzipReader
+		}
+
+		bodyBytes, err := io.ReadAll(bodyReader)
 		if err != nil {
 			return nil, err
 		}
@@ -55,11 +69,18 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 	}
 
 	// Convert headers to simple map (first value only)
+	// Preserve the canonical header name (Go canonicalizes to Title-Case)
 	headers := make(map[string]string)
 	for k, v := range r.Header {
 		if len(v) > 0 {
-			headers[strings.ToLower(k)] = v[0]
+			headers[k] = v[0]
 		}
+	}
+
+	// Add Host header manually (Go doesn't include it in r.Header)
+	// This is critical for proxy scenarios where predicates match on Host
+	if r.Host != "" {
+		headers["Host"] = r.Host
 	}
 
 	// Extract IP
@@ -80,6 +101,7 @@ func NewRequestFromHTTP(r *http.Request) (*Request, error) {
 		Method:      r.Method,
 		Path:        r.URL.Path,
 		Query:       query,
+		RawQuery:    r.URL.RawQuery, // Preserve original query string
 		Headers:     headers,
 		Body:        body,
 		Form:        form,

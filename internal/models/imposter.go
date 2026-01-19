@@ -22,7 +22,7 @@ type Imposter struct {
 	Name                 string                `json:"name,omitempty"`
 	Host                 string                `json:"host,omitempty"` // Hostname/IP to bind to (empty = all interfaces)
 	Mode                 string                `json:"mode,omitempty"` // For TCP: "text" or "binary"
-	RecordRequests       bool                  `json:"recordRequests,omitempty"`
+	RecordRequests       bool                  `json:"recordRequests"`
 	AllowCORS            bool                  `json:"allowCORS,omitempty"`            // Enable CORS preflight support
 	EndOfRequestResolver *EndOfRequestResolver `json:"endOfRequestResolver,omitempty"` // For TCP: custom request boundary detection
 	Stubs                []Stub                `json:"stubs,omitempty"`
@@ -53,8 +53,8 @@ type Imposter struct {
 	ValidFrom              string `json:"validFrom,omitempty"`              // Not Before date
 	ValidTo                string `json:"validTo,omitempty"`                // Not After date
 
-	// Internal fields (not serialized)
-	NumberOfRequests int `json:"numberOfRequests"`
+	// Internal fields (conditionally serialized)
+	NumberOfRequests *int `json:"numberOfRequests,omitempty"`
 }
 
 // TCPRequest represents a recorded TCP request
@@ -119,6 +119,82 @@ func (imp *Imposter) ExtractCertMetadata() {
 	imp.ValidTo = cert.NotAfter.UTC().Format(time.RFC3339)
 }
 
+// MarshalJSON implements custom JSON marshaling to ensure requests and stubs arrays are always present
+func (imp *Imposter) MarshalJSON() ([]byte, error) {
+	// Create an alias type to avoid infinite recursion
+	type ImposterAlias Imposter
+
+	// Create a map to manually control serialization
+	data := make(map[string]interface{})
+
+	// Marshal the imposter using the alias type
+	aliasBytes, err := json.Marshal((*ImposterAlias)(imp))
+	if err != nil {
+		return nil, err
+	}
+
+	// Unmarshal into map
+	if err := json.Unmarshal(aliasBytes, &data); err != nil {
+		return nil, err
+	}
+
+	// Ensure stubs array is always present (even if empty)
+	// This is required for mountebank compatibility - stubs should always appear
+	if _, ok := data["stubs"]; !ok {
+		data["stubs"] = []interface{}{}
+	}
+
+	// Handle requests array for mountebank compatibility:
+	// Mountebank uses "requests" for all protocols, but we store them in separate fields.
+	// TCP uses TCPRequests, SMTP uses SMTPRequests, etc.
+	// We need to normalize to "requests" in JSON output.
+
+	// Remove protocol-specific request fields from output
+	delete(data, "tcpRequests")
+	delete(data, "smtpRequests")
+	delete(data, "grpcRequests")
+
+	// Determine which requests to use based on protocol
+	switch imp.Protocol {
+	case "tcp":
+		if imp.TCPRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.TCPRequests) == 0 {
+			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.TCPRequests
+		}
+	case "smtp":
+		if imp.SMTPRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.SMTPRequests) == 0 {
+			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.SMTPRequests
+		}
+	case "grpc":
+		if imp.GRPCRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.GRPCRequests) == 0 {
+			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.GRPCRequests
+		}
+	default:
+		// HTTP/HTTPS - use Requests field
+		if imp.Requests == nil {
+			delete(data, "requests")
+		} else if len(imp.Requests) == 0 {
+			if _, ok := data["requests"]; !ok {
+				data["requests"] = []interface{}{}
+			}
+		}
+	}
+
+	// Marshal the modified map
+	return json.Marshal(data)
+}
+
 // ToJSON serializes the imposter with options
 func (imp *Imposter) ToJSON(options SerializeOptions) ([]byte, error) {
 	// Create a copy for serialization
@@ -169,5 +245,6 @@ func itoa(i int) string {
 
 // MarshalBody marshals a body value to JSON bytes
 func MarshalBody(body interface{}) ([]byte, error) {
-	return json.Marshal(body)
+	// Use MarshalIndent to match mountebank's pretty-printed JSON format
+	return json.MarshalIndent(body, "", "    ")
 }

@@ -22,13 +22,18 @@ func NewSelectorEvaluator() *SelectorEvaluator {
 // ApplySelector applies a selector to extract values from the request body
 // Returns the extracted value(s) as a string for comparison
 func (e *SelectorEvaluator) ApplySelector(body string, selector *models.Selector, selectorType string) (string, error) {
+	return e.ApplySelectorWithOptions(body, selector, selectorType, false)
+}
+
+// ApplySelectorWithOptions applies a selector with case sensitivity option
+func (e *SelectorEvaluator) ApplySelectorWithOptions(body string, selector *models.Selector, selectorType string, keyCaseSensitive bool) (string, error) {
 	if selector == nil || selector.Selector == "" {
 		return body, nil
 	}
 
 	switch selectorType {
 	case "jsonpath":
-		return e.applyJSONPath(body, selector.Selector)
+		return e.applyJSONPathWithOptions(body, selector.Selector, keyCaseSensitive)
 	case "xpath":
 		return e.applyXPath(body, selector.Selector, selector.Namespaces)
 	default:
@@ -36,19 +41,19 @@ func (e *SelectorEvaluator) ApplySelector(body string, selector *models.Selector
 	}
 }
 
-// applyJSONPath extracts values using JSONPath
-func (e *SelectorEvaluator) applyJSONPath(body, path string) (string, error) {
+// applyJSONPathWithOptions extracts values using JSONPath with case sensitivity option
+func (e *SelectorEvaluator) applyJSONPathWithOptions(body, path string, keyCaseSensitive bool) (string, error) {
 	var data interface{}
 	if err := json.Unmarshal([]byte(body), &data); err != nil {
 		return "", fmt.Errorf("invalid JSON body: %w", err)
 	}
 
-	result := e.evaluateJSONPath(data, path)
+	result := e.evaluateJSONPathWithOptions(data, path, keyCaseSensitive)
 	return result, nil
 }
 
-// evaluateJSONPath evaluates a JSONPath expression
-func (e *SelectorEvaluator) evaluateJSONPath(data interface{}, path string) string {
+// evaluateJSONPathWithOptions evaluates a JSONPath expression with case sensitivity option
+func (e *SelectorEvaluator) evaluateJSONPathWithOptions(data interface{}, path string, keyCaseSensitive bool) string {
 	// Remove leading $ if present
 	path = strings.TrimPrefix(path, "$")
 	path = strings.TrimPrefix(path, ".")
@@ -60,14 +65,14 @@ func (e *SelectorEvaluator) evaluateJSONPath(data interface{}, path string) stri
 	// Handle recursive descent (..)
 	if strings.HasPrefix(path, ".") {
 		path = strings.TrimPrefix(path, ".")
-		return e.recursiveSearch(data, path)
+		return e.recursiveSearchWithOptions(data, path, keyCaseSensitive)
 	}
 
-	return e.navigatePath(data, path)
+	return e.navigatePathWithOptions(data, path, keyCaseSensitive)
 }
 
-// navigatePath navigates through the data structure
-func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
+// navigatePathWithOptions navigates through the data structure with case sensitivity option
+func (e *SelectorEvaluator) navigatePathWithOptions(data interface{}, path string, keyCaseSensitive bool) string {
 	if path == "" {
 		return e.valueToString(data)
 	}
@@ -77,17 +82,34 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 
 	switch d := data.(type) {
 	case map[string]interface{}:
-		// Handle bracket notation for object keys: ["key"]
+		// Try exact match first (works for both case-sensitive and case-insensitive modes)
+		if val, ok := d[segment]; ok {
+			return e.navigatePathWithOptions(val, rest, keyCaseSensitive)
+		}
+
+		// If case-insensitive mode and exact match failed, try case-insensitive match
+		if !keyCaseSensitive {
+			for k, v := range d {
+				if strings.EqualFold(k, segment) {
+					return e.navigatePathWithOptions(v, rest, keyCaseSensitive)
+				}
+			}
+		}
+
+		// If segment is bracket notation, handle it
 		if strings.HasPrefix(segment, "[") {
 			key := e.extractBracketKey(segment)
 			if val, ok := d[key]; ok {
-				return e.navigatePath(val, rest)
+				return e.navigatePathWithOptions(val, rest, keyCaseSensitive)
 			}
-			return ""
-		}
-
-		// Handle array filter: [?(@.key=='value')]
-		if strings.Contains(segment, "[?(") {
+			// Try case-insensitive for bracket notation too
+			if !keyCaseSensitive {
+				for k, v := range d {
+					if strings.EqualFold(k, key) {
+						return e.navigatePathWithOptions(v, rest, keyCaseSensitive)
+					}
+				}
+			}
 			return ""
 		}
 
@@ -95,7 +117,7 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 		if segment == "*" {
 			var results []string
 			for _, v := range d {
-				result := e.navigatePath(v, rest)
+				result := e.navigatePathWithOptions(v, rest, keyCaseSensitive)
 				if result != "" {
 					results = append(results, result)
 				}
@@ -104,11 +126,6 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 				return results[0]
 			}
 			return strings.Join(results, ",")
-		}
-
-		// Regular key access
-		if val, ok := d[segment]; ok {
-			return e.navigatePath(val, rest)
 		}
 
 	case []interface{}:
@@ -120,7 +137,7 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 			if indexStr == "*" {
 				var results []string
 				for _, item := range d {
-					result := e.navigatePath(item, rest)
+					result := e.navigatePathWithOptions(item, rest, keyCaseSensitive)
 					if result != "" {
 						results = append(results, result)
 					}
@@ -140,7 +157,7 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 				index = len(d) + index
 			}
 			if index >= 0 && index < len(d) {
-				return e.navigatePath(d[index], rest)
+				return e.navigatePathWithOptions(d[index], rest, keyCaseSensitive)
 			}
 			return ""
 		}
@@ -148,7 +165,7 @@ func (e *SelectorEvaluator) navigatePath(data interface{}, path string) string {
 		// If segment is a field name, apply to all array elements
 		var results []string
 		for _, item := range d {
-			result := e.navigatePath(item, segment+rest)
+			result := e.navigatePathWithOptions(item, segment+rest, keyCaseSensitive)
 			if result != "" {
 				results = append(results, result)
 			}
@@ -219,22 +236,35 @@ func (e *SelectorEvaluator) extractBracketKey(segment string) string {
 	return key
 }
 
-// recursiveSearch searches recursively for a key
-func (e *SelectorEvaluator) recursiveSearch(data interface{}, path string) string {
+// recursiveSearchWithOptions searches recursively for a key with case sensitivity option
+func (e *SelectorEvaluator) recursiveSearchWithOptions(data interface{}, path string, keyCaseSensitive bool) string {
 	segment, rest := e.parsePathSegment(path)
 
 	switch d := data.(type) {
 	case map[string]interface{}:
-		// Check current level
+		// Check current level with exact match
 		if val, ok := d[segment]; ok {
-			result := e.navigatePath(val, rest)
+			result := e.navigatePathWithOptions(val, rest, keyCaseSensitive)
 			if result != "" {
 				return result
 			}
 		}
+
+		// If case-insensitive mode, try case-insensitive match
+		if !keyCaseSensitive {
+			for k, v := range d {
+				if strings.EqualFold(k, segment) {
+					result := e.navigatePathWithOptions(v, rest, keyCaseSensitive)
+					if result != "" {
+						return result
+					}
+				}
+			}
+		}
+
 		// Search deeper
 		for _, v := range d {
-			result := e.recursiveSearch(v, path)
+			result := e.recursiveSearchWithOptions(v, path, keyCaseSensitive)
 			if result != "" {
 				return result
 			}
@@ -242,7 +272,7 @@ func (e *SelectorEvaluator) recursiveSearch(data interface{}, path string) strin
 
 	case []interface{}:
 		for _, item := range d {
-			result := e.recursiveSearch(item, path)
+			result := e.recursiveSearchWithOptions(item, path, keyCaseSensitive)
 			if result != "" {
 				return result
 			}
@@ -303,12 +333,14 @@ func (e *SelectorEvaluator) applyXPath(body, xpath string, namespaces map[string
 		return e.getXMLNodeValue(nodes[0]), nil
 	}
 
-	// Return all matches joined
+	// Return all matches as JSON array (mountebank compatibility)
 	var results []string
 	for _, node := range nodes {
 		results = append(results, e.getXMLNodeValue(node))
 	}
-	return strings.Join(results, ","), nil
+	// Return as JSON array to enable array predicate matching
+	jsonArray, _ := json.Marshal(results)
+	return string(jsonArray), nil
 }
 
 // getXMLNodeValue extracts the text value from an XML node

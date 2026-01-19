@@ -158,7 +158,8 @@ func JSONBody(next http.Handler) http.Handler {
 				// Validate JSON if body is not empty
 				if len(body) > 0 {
 					if !json.Valid(body) {
-						response.WriteError(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "unable to parse body as JSON")
+						source := string(body)
+						response.WriteErrorWithSource(w, http.StatusBadRequest, response.ErrCodeInvalidJSON, "Unable to parse body as JSON", &source)
 						return
 					}
 				}

@@ -304,6 +304,12 @@ func runStop() {
 	// Read PID from file
 	data, err := os.ReadFile(*pidFile)
 	if err != nil {
+		// If pidfile doesn't exist, there's nothing to stop - exit successfully
+		// This matches mountebank's behavior for compatibility with test harness
+		if os.IsNotExist(err) {
+			fmt.Println("no pidfile found, nothing to stop")
+			os.Exit(0)
+		}
 		log.Fatalf("failed to read pid file: %v", err)
 	}
 
@@ -319,9 +325,17 @@ func runStop() {
 	}
 
 	if err := process.Signal(syscall.SIGTERM); err != nil {
+		// Process might already be dead, which is fine - exit successfully
+		if err == os.ErrProcessDone {
+			fmt.Printf("process %d already stopped\n", pid)
+			os.Remove(*pidFile)
+			os.Exit(0)
+		}
 		log.Fatalf("failed to stop process: %v", err)
 	}
 
+	// Remove pidfile after successful stop
+	os.Remove(*pidFile)
 	fmt.Printf("stopped mountebank process %d\n", pid)
 }
 

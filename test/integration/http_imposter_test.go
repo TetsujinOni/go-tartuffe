@@ -379,8 +379,8 @@ func TestHttpImposter_ShouldSaveHeaders(t *testing.T) {
 	reqMap := requests[0].(map[string]interface{})
 	headers := reqMap["headers"].(map[string]interface{})
 
-	// Verify header was recorded (headers are stored lowercase)
-	acceptVal := headers["accept"]
+	// Verify header was recorded (headers are stored with canonical case)
+	acceptVal := headers["Accept"]
 	if acceptVal != "application/json" {
 		t.Errorf("expected Accept header 'application/json', got '%v'", acceptVal)
 	}

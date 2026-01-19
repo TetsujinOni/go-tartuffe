@@ -541,6 +541,42 @@ func (r *FilesystemRepository) ClearRequests(port int) error {
 	return os.RemoveAll(r.requestsDir(port))
 }
 
+// ClearRequestsAndProxyStubs clears requests and removes proxy-generated stubs
+func (r *FilesystemRepository) ClearRequestsAndProxyStubs(port int) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	impFile := r.imposterFile(port)
+	if _, err := os.Stat(impFile); os.IsNotExist(err) {
+		return ErrNotFound{Port: port}
+	}
+
+	// Load the imposter
+	imp := &models.Imposter{}
+	if err := readJSON(impFile, imp); err != nil {
+		return err
+	}
+
+	// Clear requests directory
+	os.RemoveAll(r.requestsDir(port))
+
+	// Remove proxy-generated stubs
+	filteredStubs := make([]models.Stub, 0, len(imp.Stubs))
+	for _, stub := range imp.Stubs {
+		if !stub.IsProxyGenerated {
+			filteredStubs = append(filteredStubs, stub)
+		}
+	}
+	imp.Stubs = filteredStubs
+
+	// Reset request count
+	count := 0
+	imp.NumberOfRequests = &count
+
+	// Save the updated imposter
+	return writeJSON(impFile, imp)
+}
+
 // AddRequest records a request for an imposter
 func (r *FilesystemRepository) AddRequest(port int, req models.Request) error {
 	r.mu.Lock()

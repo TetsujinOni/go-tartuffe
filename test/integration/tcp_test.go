@@ -296,18 +296,18 @@ func TestTCP_RecordRequests(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", getResp.StatusCode)
 	}
 
-	tcpRequests, ok := body["tcpRequests"].([]interface{})
+	requests, ok := body["requests"].([]interface{})
 	if !ok {
-		t.Fatal("expected tcpRequests array")
+		t.Fatal("expected requests array")
 	}
 
-	if len(tcpRequests) != 3 {
-		t.Errorf("expected 3 recorded requests, got %d", len(tcpRequests))
+	if len(requests) != 3 {
+		t.Errorf("expected 3 recorded requests, got %d", len(requests))
 	}
 
 	// Verify first request
-	if len(tcpRequests) > 0 {
-		firstReq := tcpRequests[0].(map[string]interface{})
+	if len(requests) > 0 {
+		firstReq := requests[0].(map[string]interface{})
 		if firstReq["data"] != "Message1" {
 			t.Errorf("expected first request data 'Message1', got '%v'", firstReq["data"])
 		}

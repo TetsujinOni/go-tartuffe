@@ -14,7 +14,6 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/plugin/builtin"
 	pluginrepo "github.com/TetsujinOni/go-tartuffe/internal/plugin/repository"
 	"github.com/TetsujinOni/go-tartuffe/internal/repository"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Server is the main API server
@@ -117,6 +116,7 @@ func NewServer(cfg ServerConfig) *Server {
 	stubsHandler := handlers.NewStubsHandler(repo)
 	configHandler := handlers.NewConfigHandler(cfg.Port, cfg.Host, cfg.AllowInjection, cfg.LocalOnly, cfg.Debug, cfg.IPWhitelist, cfg.Origin, startTime.Unix())
 	logsHandler := handlers.NewLogsHandler()
+	metricsHandler := handlers.NewMetricsHandler()
 
 	// Create router
 	router := NewRouter()
@@ -136,6 +136,7 @@ func NewServer(cfg ServerConfig) *Server {
 	router.DELETE("/imposters/{id}", imposterHandler.DeleteImposter)
 
 	// Imposter requests/proxies
+	router.DELETE("/imposters/{id}/requests", imposterHandler.DeleteRequests)
 	router.DELETE("/imposters/{id}/savedRequests", imposterHandler.ResetRequests)
 	router.DELETE("/imposters/{id}/savedProxyResponses", imposterHandler.ResetRequests) // Same handler
 
@@ -153,7 +154,7 @@ func NewServer(cfg ServerConfig) *Server {
 	router.GET("/logs", logsHandler.GetLogs)
 
 	// Prometheus metrics endpoint
-	router.GET("/metrics", promhttp.Handler().ServeHTTP)
+	router.GET("/metrics", metricsHandler.GetMetrics)
 
 	// Apply middleware chain
 	handler := Logger(

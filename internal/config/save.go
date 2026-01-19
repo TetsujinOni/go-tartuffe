@@ -39,7 +39,7 @@ func (s *Saver) Save(imposters []*models.Imposter) error {
 		// In replayable mode, exclude requests
 		if s.options.Replayable {
 			impCopy.Requests = nil
-			impCopy.NumberOfRequests = 0
+			impCopy.NumberOfRequests = nil
 		}
 
 		// Remove proxy responses if requested

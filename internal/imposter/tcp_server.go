@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
+	"github.com/dop251/goja"
 )
 
 // TCPServer represents a TCP imposter server
@@ -20,6 +22,7 @@ type TCPServer struct {
 	listener net.Listener
 	matcher  *TCPMatcher
 	jsEngine *JSEngine
+	state    map[string]interface{} // Persistent state for injection scripts
 	started  bool
 	stopping bool
 	mu       sync.RWMutex
@@ -32,6 +35,7 @@ func NewTCPServer(imp *models.Imposter) (*TCPServer, error) {
 		imposter: imp,
 		matcher:  NewTCPMatcher(imp),
 		jsEngine: NewJSEngine(),
+		state:    make(map[string]interface{}),
 	}, nil
 }
 
@@ -42,17 +46,23 @@ func (s *TCPServer) Start() error {
 		s.mu.Unlock()
 		return fmt.Errorf("server already started")
 	}
-	s.started = true
-	s.mu.Unlock()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.imposter.Host, s.imposter.Port))
 	if err != nil {
-		s.mu.Lock()
-		s.started = false
 		s.mu.Unlock()
 		return fmt.Errorf("failed to listen on %s:%d: %w", s.imposter.Host, s.imposter.Port, err)
 	}
+
+	// Get the actual port if port=0 was used (auto-assign)
+	if s.imposter.Port == 0 {
+		if tcpAddr, ok := listener.Addr().(*net.TCPAddr); ok {
+			s.imposter.Port = tcpAddr.Port
+		}
+	}
+
 	s.listener = listener
+	s.started = true
+	s.mu.Unlock()
 
 	go s.acceptLoop()
 
@@ -137,18 +147,56 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		}
 		s.imposter.TCPRequests = append(s.imposter.TCPRequests, tcpReq)
 	}
-	s.imposter.NumberOfRequests++
+	// Increment request counter
+	if s.imposter.NumberOfRequests == nil {
+		count := 1
+		s.imposter.NumberOfRequests = &count
+	} else {
+		*s.imposter.NumberOfRequests++
+	}
 	s.mu.Unlock()
 
 	// Find matching stub
 	match := s.matcher.Match(dataStr)
 
-	// Write response
-	if match.Response != nil && match.Response.Data != "" {
-		responseData := match.Response.Data
+	// Check for proxy response first
+	if match.RawResponse != nil && match.RawResponse.Proxy != nil {
+		s.handleProxyRequest(conn, data, match.RawResponse)
+		return
+	}
 
+	// Determine response data
+	var responseData string
+
+	// Check for injection response
+	if match.RawResponse != nil && match.RawResponse.Inject != "" {
+		// Execute injection to get response
+		s.mu.Lock()
+		injectedData, err := s.jsEngine.ExecuteTCPResponse(match.RawResponse.Inject, dataStr, s.state)
+		s.mu.Unlock()
+
+		if err != nil {
+			log.Printf("[ERROR] TCP response injection error: %v", err)
+			// Fall through to use static response if available
+			if match.Response != nil {
+				responseData = match.Response.Data
+			}
+		} else {
+			responseData = injectedData
+		}
+	} else if match.Response != nil {
+		responseData = match.Response.Data
+	}
+
+	// Apply behaviors if present
+	if match.RawResponse != nil && len(match.RawResponse.Behaviors) > 0 {
+		responseData = s.applyTCPBehaviors(dataStr, responseData, match.RawResponse.Behaviors)
+	}
+
+	// Write response if we have data
+	if responseData != "" {
 		// Handle binary mode
-		if s.imposter.Mode == "binary" || match.Response.Mode == "binary" {
+		if s.imposter.Mode == "binary" || (match.Response != nil && match.Response.Mode == "binary") {
 			decoded, err := base64.StdEncoding.DecodeString(responseData)
 			if err == nil {
 				conn.Write(decoded)
@@ -157,6 +205,135 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		}
 
 		conn.Write([]byte(responseData))
+	}
+}
+
+// applyTCPBehaviors applies behaviors to TCP response data
+func (s *TCPServer) applyTCPBehaviors(requestData, responseData string, behaviors []models.Behavior) string {
+	result := responseData
+
+	// Create a simple request/response structure for behaviors
+	// For TCP, request data goes in Body, response uses Data field
+	req := &models.Request{
+		Body: requestData,
+	}
+	resp := &models.IsResponse{
+		Data: result,
+	}
+
+	// Use BehaviorExecutor for full behavior support
+	behaviorExecutor := NewBehaviorExecutor(s.jsEngine)
+	processedResp, err := behaviorExecutor.Execute(req, resp, behaviors)
+	if err != nil {
+		log.Printf("[ERROR] TCP behavior execution error: %v", err)
+		return result
+	}
+
+	// Extract data from processed response
+	if processedResp.Data != "" {
+		result = processedResp.Data
+	} else if bodyStr, ok := processedResp.Body.(string); ok {
+		result = bodyStr
+	}
+
+	return result
+}
+
+// executeTCPDecorate executes a decorate behavior for TCP
+func (s *TCPServer) executeTCPDecorate(requestData, responseData, script string) string {
+	vm := goja.New()
+
+	// Create request object
+	reqObj := map[string]interface{}{
+		"data": requestData,
+	}
+
+	// Create response object (mutable)
+	respObj := map[string]interface{}{
+		"data": responseData,
+	}
+
+	vm.Set("request", reqObj)
+	vm.Set("response", respObj)
+
+	// Wrap the script to execute the function
+	wrappedScript := fmt.Sprintf(`
+		(function() {
+			var fn = %s;
+			fn(request, response);
+			return response;
+		})()
+	`, script)
+
+	result, err := vm.RunString(wrappedScript)
+	if err != nil {
+		log.Printf("[ERROR] TCP decorate behavior error: %v", err)
+		return responseData
+	}
+
+	// Extract data from the result
+	exported := result.Export()
+	if respMap, ok := exported.(map[string]interface{}); ok {
+		if data, ok := respMap["data"]; ok {
+			return fmt.Sprintf("%v", data)
+		}
+	}
+
+	return responseData
+}
+
+// handleProxyRequest proxies the TCP request to the origin server
+func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, resp *models.Response) {
+	// Parse the target URL
+	targetURL := resp.Proxy.To
+	// Remove tcp:// prefix if present
+	target := strings.TrimPrefix(targetURL, "tcp://")
+
+	// Connect to origin server
+	originConn, err := net.DialTimeout("tcp", target, 5*time.Second)
+	if err != nil {
+		log.Printf("[ERROR] TCP proxy connection failed to %s: %v", target, err)
+		// Close client connection on proxy error
+		return
+	}
+	defer originConn.Close()
+
+	// Forward request to origin
+	if _, err := originConn.Write(requestData); err != nil {
+		log.Printf("[ERROR] TCP proxy write to origin failed: %v", err)
+		mountebankStyleError := `{errors:[{code:'invalid proxy',message:'Cannot resolve "%s"'}]}`
+		clientConn.Write([]byte(fmt.Sprintf(mountebankStyleError, targetURL)))
+		return
+	}
+
+	// Read response from origin
+	originConn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	response := make([]byte, 4096)
+	n, err := originConn.Read(response)
+	if err != nil && err != io.EOF {
+		log.Printf("[ERROR] TCP proxy read from origin failed: %v", err)
+		return
+	}
+
+	// Apply behaviors if present
+	responseData := string(response[:n])
+	if len(resp.Behaviors) > 0 {
+		// Create a request object for behaviors
+		reqData := string(requestData)
+
+		// Apply behaviors to the proxy response
+		for _, behavior := range resp.Behaviors {
+			// Apply decorate behavior
+			if behavior.Decorate != "" {
+				responseData = s.executeTCPDecorate(reqData, responseData, behavior.Decorate)
+			}
+			// Other behaviors (wait, copy, etc.) can be added here
+		}
+	}
+
+	// Forward response to client
+	if len(responseData) > 0 {
+		clientConn.Write([]byte(responseData))
 	}
 }
 
@@ -190,15 +367,9 @@ func (s *TCPServer) readRequest(conn net.Conn) ([]byte, error) {
 			accumulated = append(accumulated, buffer[:n]...)
 
 			// Check if request is complete using the resolver
-			// Convert accumulated data to string for resolver
-			var dataStr string
-			if s.imposter.Mode == "binary" {
-				dataStr = base64.StdEncoding.EncodeToString(accumulated)
-			} else {
-				dataStr = string(accumulated)
-			}
-
-			complete, resolverErr := s.jsEngine.ExecuteEndOfRequestResolver(resolver.Inject, dataStr)
+			// Pass raw bytes and binary mode flag to the resolver
+			isBinary := s.imposter.Mode == "binary"
+			complete, resolverErr := s.jsEngine.ExecuteEndOfRequestResolver(resolver.Inject, accumulated, isBinary)
 			if resolverErr != nil {
 				// Resolver error - treat current data as complete request
 				return accumulated, nil
@@ -244,18 +415,23 @@ func (s *TCPServer) UpdateStubs(stubs []models.Stub) {
 // TCPMatcher handles request matching for TCP protocol
 type TCPMatcher struct {
 	imposter *models.Imposter
+	jsEngine *JSEngine
 }
 
 // NewTCPMatcher creates a new TCP matcher
 func NewTCPMatcher(imp *models.Imposter) *TCPMatcher {
-	return &TCPMatcher{imposter: imp}
+	return &TCPMatcher{
+		imposter: imp,
+		jsEngine: NewJSEngine(),
+	}
 }
 
 // TCPMatchResult contains the result of matching a TCP request
 type TCPMatchResult struct {
-	Response  *models.IsResponse
-	Stub      *models.Stub
-	StubIndex int
+	Response    *models.IsResponse
+	RawResponse *models.Response // For accessing Inject field
+	Stub        *models.Stub
+	StubIndex   int
 }
 
 // Match finds a matching stub for the given TCP data
@@ -295,9 +471,10 @@ func (m *TCPMatcher) getMatchResult(stub *models.Stub, index int) *TCPMatchResul
 	}
 
 	return &TCPMatchResult{
-		Response:  resp.Is,
-		Stub:      stub,
-		StubIndex: index,
+		Response:    resp.Is,
+		RawResponse: resp,
+		Stub:        stub,
+		StubIndex:   index,
 	}
 }
 
@@ -318,6 +495,17 @@ func (m *TCPMatcher) matchesAllPredicates(stub *models.Stub, data string) bool {
 
 // evaluatePredicate evaluates a single predicate against TCP data
 func (m *TCPMatcher) evaluatePredicate(pred *models.Predicate, data string) bool {
+	// Handle injection first
+	if pred.Inject != "" {
+		result, err := m.jsEngine.ExecuteTCPPredicate(pred.Inject, data)
+		if err != nil {
+			// Log error but don't match on injection error
+			log.Printf("[WARN] TCP predicate injection error: %v", err)
+			return false
+		}
+		return result
+	}
+
 	// Handle logical operators
 	if pred.And != nil {
 		for _, p := range pred.And {

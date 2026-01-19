@@ -19,7 +19,8 @@ import (
 
 // ProxyHandler handles proxy responses
 type ProxyHandler struct {
-	client *http.Client
+	client   *http.Client
+	jsEngine *JSEngine
 }
 
 // NewProxyHandler creates a new proxy handler
@@ -27,11 +28,17 @@ func NewProxyHandler() *ProxyHandler {
 	return &ProxyHandler{
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			Transport: &http.Transport{
+				// Disable automatic decompression so we can preserve Content-Encoding headers
+				// and binary data as-is from the origin server
+				DisableCompression: true,
+			},
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Don't follow redirects - return them to the client
 				return http.ErrUseLastResponse
 			},
 		},
+		jsEngine: NewJSEngine(),
 	}
 }
 
@@ -75,7 +82,8 @@ func (h *ProxyHandler) getClient(proxy *models.ProxyResponse) *http.Client {
 
 	// Create transport with custom TLS config
 	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
+		TLSClientConfig:    tlsConfig,
+		DisableCompression: true, // Preserve Content-Encoding headers
 	}
 
 	return &http.Client{
@@ -97,7 +105,7 @@ type ProxyResult struct {
 // Execute proxies a request and returns the response
 func (h *ProxyHandler) Execute(req *models.Request, proxy *models.ProxyResponse, originalReq *http.Request) (*ProxyResult, error) {
 	// Build target URL
-	targetURL, err := h.buildTargetURL(proxy.To, req)
+	targetURL, err := h.buildTargetURL(proxy.To, req, originalReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build target URL: %w", err)
 	}
@@ -121,15 +129,29 @@ func (h *ProxyHandler) Execute(req *models.Request, proxy *models.ProxyResponse,
 		return nil, fmt.Errorf("failed to create proxy request: %w", err)
 	}
 
-	// Copy headers from original request
+	// Copy headers from original request (except Host - it's handled specially below)
+	// Note: Go's HTTP client automatically sets Host from the target URL,
+	// and we want to preserve that behavior unless explicitly overridden
 	for k, v := range req.Headers {
-		proxyReq.Header.Set(k, v)
+		if strings.ToLower(k) != "host" {
+			proxyReq.Header.Set(k, v)
+		}
 	}
 
 	// Add injected headers
+	// Note: Go's HTTP client requires Host to be set via proxyReq.Host, not Header
 	for k, v := range proxy.InjectHeaders {
-		proxyReq.Header.Set(k, v)
+		if strings.ToLower(k) == "host" {
+			proxyReq.Host = v
+		} else {
+			proxyReq.Header.Set(k, v)
+		}
 	}
+
+	// At this point:
+	// - If InjectHeaders specified a Host, it's set via proxyReq.Host
+	// - Otherwise, Go's HTTP client uses the host from targetURL (desired behavior)
+	// - All other headers (from original request + injected) are in proxyReq.Header
 
 	// Remove hop-by-hop headers
 	proxyReq.Header.Del("connection")
@@ -185,11 +207,31 @@ func (h *ProxyHandler) Execute(req *models.Request, proxy *models.ProxyResponse,
 
 	// Check if response is binary
 	contentType := resp.Header.Get("Content-Type")
-	if isBinaryResponseContent(contentType, respBody) {
+	contentEncoding := resp.Header.Get("Content-Encoding")
+
+	// Content-Encoding: gzip indicates binary content
+	if contentEncoding == "gzip" || isBinaryResponseContent(contentType, respBody) {
 		isResp.Body = base64.StdEncoding.EncodeToString(respBody)
 		isResp.Mode = "binary"
 	} else {
-		isResp.Body = string(respBody)
+		// Check if response is JSON and should be stored as object
+		// For pretty-printed JSON from go-tartuffe origins (starts with "{\n" or "[\n"),
+		// parse and store as object to match mountebank behavior
+		bodyStr := string(respBody)
+		isPrettyJSON := (strings.HasPrefix(bodyStr, "{\n") || strings.HasPrefix(bodyStr, "[\n")) &&
+			len(respBody) > 0
+
+		if isPrettyJSON || strings.Contains(strings.ToLower(contentType), "application/json") {
+			var jsonBody interface{}
+			if json.Unmarshal(respBody, &jsonBody) == nil {
+				isResp.Body = jsonBody
+			} else {
+				// If JSON parsing fails, store as string
+				isResp.Body = bodyStr
+			}
+		} else {
+			isResp.Body = bodyStr
+		}
 	}
 
 	result := &ProxyResult{
@@ -217,7 +259,7 @@ func (h *ProxyHandler) Execute(req *models.Request, proxy *models.ProxyResponse,
 }
 
 // buildTargetURL constructs the target URL for proxying
-func (h *ProxyHandler) buildTargetURL(to string, req *models.Request) (string, error) {
+func (h *ProxyHandler) buildTargetURL(to string, req *models.Request, originalReq *http.Request) (string, error) {
 	targetBase, err := url.Parse(to)
 	if err != nil {
 		return "", err
@@ -226,8 +268,11 @@ func (h *ProxyHandler) buildTargetURL(to string, req *models.Request) (string, e
 	// Append path from request
 	targetURL := targetBase.ResolveReference(&url.URL{Path: req.Path})
 
-	// Add query parameters
-	if len(req.Query) > 0 {
+	// Preserve raw query string from original request if available
+	if originalReq != nil && originalReq.URL.RawQuery != "" {
+		targetURL.RawQuery = originalReq.URL.RawQuery
+	} else if len(req.Query) > 0 {
+		// Fallback to reconstructing from query map
 		q := targetURL.Query()
 		for k, v := range req.Query {
 			q.Set(k, v)
@@ -285,6 +330,16 @@ func (h *ProxyHandler) generatePredicates(req *models.Request, generators []mode
 	var predicates []models.Predicate
 
 	for _, gen := range generators {
+		// Handle inject-based predicate generation
+		if gen.Inject != "" {
+			generated, err := h.executePredicateInjection(req, gen.Inject)
+			if err == nil && generated != nil {
+				predicates = append(predicates, generated...)
+			}
+			continue
+		}
+
+		// Handle matches-based predicate generation
 		pred := h.generatePredicate(req, &gen)
 		if pred != nil {
 			predicates = append(predicates, *pred)
@@ -395,13 +450,59 @@ func (h *ProxyHandler) extractWithPattern(value interface{}, pattern string) int
 	return nil
 }
 
-// ToJSON serializes a value to JSON for body comparison
-func toJSON(v interface{}) string {
-	b, err := json.Marshal(v)
+// executePredicateInjection executes JavaScript to generate predicates from a request
+func (h *ProxyHandler) executePredicateInjection(req *models.Request, script string) ([]models.Predicate, error) {
+	// Execute the predicate generator function with the request
+	result, err := h.jsEngine.ExecutePredicateGenerator(script, req)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	return string(b)
+
+	// The result should be an array of predicates
+	// Convert from interface{} to []models.Predicate
+	resultSlice, ok := result.([]interface{})
+	if !ok {
+		// If it's not an array, return empty
+		return nil, nil
+	}
+
+	var predicates []models.Predicate
+	for _, item := range resultSlice {
+		itemMap, ok := item.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		// Convert each predicate map to a models.Predicate
+		pred := models.Predicate{}
+
+		// Check for each operator type
+		if equals, ok := itemMap["equals"]; ok {
+			pred.Equals = equals
+		}
+		if deepEquals, ok := itemMap["deepEquals"]; ok {
+			pred.DeepEquals = deepEquals
+		}
+		if contains, ok := itemMap["contains"]; ok {
+			pred.Contains = contains
+		}
+		if startsWith, ok := itemMap["startsWith"]; ok {
+			pred.StartsWith = startsWith
+		}
+		if endsWith, ok := itemMap["endsWith"]; ok {
+			pred.EndsWith = endsWith
+		}
+		if matches, ok := itemMap["matches"]; ok {
+			pred.Matches = matches
+		}
+		if exists, ok := itemMap["exists"]; ok {
+			pred.Exists = exists
+		}
+
+		predicates = append(predicates, pred)
+	}
+
+	return predicates, nil
 }
 
 // BuildProxyRequest creates an HTTP request for proxying

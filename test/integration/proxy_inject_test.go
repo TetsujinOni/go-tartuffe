@@ -461,12 +461,13 @@ func TestProxy_InjectHeaders(t *testing.T) {
 	defer cleanup(t)
 
 	// Create target that echoes headers
+	// Headers are stored with canonical case (Go Title-Case)
 	targetScript := `function(request, state, logger) {
 		return {
 			statusCode: 200,
 			body: JSON.stringify({
-				authorization: request.headers["authorization"],
-				custom: request.headers["x-custom-header"]
+				authorization: request.headers["Authorization"],
+				custom: request.headers["X-Custom-Header"]
 			})
 		};
 	}`
@@ -537,5 +538,241 @@ func TestProxy_InjectHeaders(t *testing.T) {
 	}
 	if result["custom"] != "custom-value" {
 		t.Errorf("expected custom='custom-value', got %v", result["custom"])
+	}
+}
+
+// TestInject_NewConfigInterface tests the new config interface (config.request, config.state, config.logger)
+// mountebank test: "should allow javascript predicate for matching" (test #21)
+func TestInject_NewConfigInterface_Predicate(t *testing.T) {
+	defer cleanup(t)
+
+	// New interface: function takes single config parameter with request, state, logger
+	injectScript := `config => config.request.path === '/test'`
+
+	resp, _, err := post("/imposters", map[string]interface{}{
+		"protocol": "http",
+		"port":     5320,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{"inject": injectScript},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "MATCHED"}},
+				},
+			},
+			{
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "DEFAULT"}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Test matching
+	impResp, err := http.Get("http://localhost:5320/test")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "MATCHED" {
+		t.Errorf("expected 'MATCHED', got '%s'", string(body))
+	}
+}
+
+// TestInject_StateInPredicateInjection tests state modification in predicate injection
+// mountebank test: "should allow changing state in predicate injection (issue #495)" (test #22)
+func TestInject_StateInPredicateInjection(t *testing.T) {
+	defer cleanup(t)
+
+	// Predicate that modifies state and matches on second request
+	injectScript := `config => {
+		config.state.requests = config.state.requests || 0;
+		config.state.requests += 1;
+		return config.state.requests === 2;
+	}`
+
+	resp, _, err := post("/imposters", map[string]interface{}{
+		"protocol": "http",
+		"port":     5321,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{"inject": injectScript},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "MATCHED"}},
+				},
+			},
+			{
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "UNMATCHED"}},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// First request - state.requests becomes 1, should not match
+	resp1, _ := http.Get("http://localhost:5321/")
+	body1, _ := io.ReadAll(resp1.Body)
+	resp1.Body.Close()
+
+	if string(body1) != "UNMATCHED" {
+		t.Errorf("first request: expected 'UNMATCHED', got '%s'", string(body1))
+	}
+
+	// Second request - state.requests becomes 2, should match
+	resp2, _ := http.Get("http://localhost:5321/")
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+
+	if string(body2) != "MATCHED" {
+		t.Errorf("second request: expected 'MATCHED', got '%s'", string(body2))
+	}
+}
+
+// TestInject_StatePersistenceAcrossRequests tests state persistence in response injection
+// mountebank test: "should allow javascript injection to keep state between requests" (test #25-26)
+func TestInject_StatePersistenceAcrossRequests(t *testing.T) {
+	defer cleanup(t)
+
+	// Response injection that increments a counter
+	injectScript := `config => {
+		if (!config.state.calls) { config.state.calls = 0; }
+		config.state.calls += 1;
+		return { body: config.state.calls.toString() };
+	}`
+
+	resp, _, err := post("/imposters", map[string]interface{}{
+		"protocol": "http",
+		"port":     5322,
+		"stubs": []map[string]interface{}{
+			{
+				"responses": []map[string]interface{}{
+					{"inject": injectScript},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// First request
+	resp1, _ := http.Get("http://localhost:5322/")
+	body1, _ := io.ReadAll(resp1.Body)
+	resp1.Body.Close()
+
+	if string(body1) != "1" {
+		t.Errorf("first request: expected '1', got '%s'", string(body1))
+	}
+
+	// Second request
+	resp2, _ := http.Get("http://localhost:5322/")
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+
+	if string(body2) != "2" {
+		t.Errorf("second request: expected '2', got '%s'", string(body2))
+	}
+}
+
+// TestInject_SharedStateBetweenPredicateAndResponse tests state sharing
+// mountebank test: "should share state with predicate and response injection" (test #27-28)
+func TestInject_SharedStateBetweenPredicateAndResponse(t *testing.T) {
+	defer cleanup(t)
+
+	// Response injection that increments calls counter
+	responseFn := `config => {
+		config.state.calls = config.state.calls || 0;
+		config.state.calls += 1;
+		return { body: 'INJECT' };
+	}`
+
+	// Predicate injection that checks if calls > 1
+	predicateFn := `config => {
+		var numCalls = config.state.calls || 0;
+		return numCalls > 1;
+	}`
+
+	resp, _, err := post("/imposters", map[string]interface{}{
+		"protocol": "http",
+		"port":     5323,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{"and": []map[string]interface{}{
+						{"inject": predicateFn},
+						{"equals": map[string]interface{}{"path": "/"}},
+					}},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "IS"}},
+				},
+			},
+			{
+				"responses": []map[string]interface{}{
+					{"inject": responseFn},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// First request - predicate checks calls=0, false; falls to inject which sets calls=1
+	resp1, _ := http.Get("http://localhost:5323/")
+	body1, _ := io.ReadAll(resp1.Body)
+	resp1.Body.Close()
+
+	if string(body1) != "INJECT" {
+		t.Errorf("first request: expected 'INJECT', got '%s'", string(body1))
+	}
+
+	// Second request - predicate checks calls=1, false (1 > 1 is false); falls to inject which sets calls=2
+	resp2, _ := http.Get("http://localhost:5323/")
+	body2, _ := io.ReadAll(resp2.Body)
+	resp2.Body.Close()
+
+	if string(body2) != "INJECT" {
+		t.Errorf("second request: expected 'INJECT', got '%s'", string(body2))
+	}
+
+	// Third request - predicate checks calls=2, true (2 > 1); returns IS
+	resp3, _ := http.Get("http://localhost:5323/")
+	body3, _ := io.ReadAll(resp3.Body)
+	resp3.Body.Close()
+
+	if string(body3) != "IS" {
+		t.Errorf("third request: expected 'IS', got '%s'", string(body3))
 	}
 }
