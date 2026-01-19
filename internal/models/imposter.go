@@ -139,13 +139,26 @@ func (imp *Imposter) MarshalJSON() ([]byte, error) {
 	}
 
 	// Ensure stubs array is always present (even if empty)
+	// This is required for mountebank compatibility - stubs should always appear
 	if _, ok := data["stubs"]; !ok {
 		data["stubs"] = []interface{}{}
 	}
 
-	// Ensure requests array is always present (even if empty)
-	if _, ok := data["requests"]; !ok {
-		data["requests"] = []interface{}{}
+	// Handle requests array carefully:
+	// - If Requests is nil (explicitly set to nil in replayable mode): omit from JSON
+	// - If Requests is non-nil empty slice (non-replayable mode): include as empty array
+
+	// CRITICAL: Remove requests from map if it exists and Requests field is nil
+	// This handles the case where omitempty didn't omit an empty non-nil slice
+	// that was later set to nil (replayable mode)
+	if imp.Requests == nil {
+		// Explicitly remove requests from the map to ensure it doesn't appear in JSON
+		delete(data, "requests")
+	} else if len(imp.Requests) == 0 {
+		// Non-nil empty slice: ensure it appears in output
+		if _, ok := data["requests"]; !ok {
+			data["requests"] = []interface{}{}
+		}
 	}
 
 	// Marshal the modified map

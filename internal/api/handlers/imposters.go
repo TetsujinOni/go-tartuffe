@@ -324,6 +324,12 @@ func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptio
 			Self:  &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port)},
 			Stubs: &models.Link{Href: baseURL + "/imposters/" + strconv.Itoa(imp.Port) + "/stubs"},
 		}
+
+		// Ensure requests array exists in non-replayable mode (even if empty)
+		// This is required for mountebank compatibility
+		if result.Requests == nil {
+			result.Requests = []models.Request{}
+		}
 	}
 
 	// Remove proxy responses if requested (but keep stubs with non-proxy responses)
