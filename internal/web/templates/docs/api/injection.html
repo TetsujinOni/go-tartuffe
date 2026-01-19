@@ -1,0 +1,75 @@
+{{template "header" .}}
+
+<h1>Injection</h1>
+
+<p>Injection allows you to extend tartuffe's functionality using JavaScript. It provides
+ultimate flexibility for complex testing scenarios that can't be handled with static
+stub configurations.</p>
+
+<p class='warning-icon'><strong>Security Warning:</strong> Injection is disabled by default.
+You must start tartuffe with the <code>--allowInjection</code> flag to enable it.
+See the <a href='/docs/security'>security page</a> for important security considerations.</p>
+
+<h2>Response Injection</h2>
+
+<p>You can inject a JavaScript function to dynamically generate responses:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "responses": [{
+      "inject": "function(request) { return { body: 'Hello, ' + request.query.name }; }"
+    }]
+  }]
+}</code></pre>
+
+<p>The function receives the request object and must return a response object.</p>
+
+<h2>Predicate Injection</h2>
+
+<p>You can inject a JavaScript function to determine if a predicate matches:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "predicates": [{
+      "inject": "function(request) { return request.query.allowed === 'true'; }"
+    }],
+    "responses": [{
+      "is": { "body": "Allowed!" }
+    }]
+  }]
+}</code></pre>
+
+<p>The function receives the request object and must return a boolean.</p>
+
+<h2>Available Objects</h2>
+
+<p>Injected functions have access to:</p>
+
+<table>
+  <tr>
+    <th>Object</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>request</code></td>
+    <td>The incoming request object (protocol-specific fields)</td>
+  </tr>
+  <tr>
+    <td><code>state</code></td>
+    <td>A shared state object persisted across all invocations on the imposter</td>
+  </tr>
+  <tr>
+    <td><code>logger</code></td>
+    <td>A logging object for debugging</td>
+  </tr>
+</table>
+
+<!-- TODO: tartuffe uses goja/embedded JS engine - some Node.js APIs may not be available -->
+<p class='info-icon'><strong>Note:</strong> Tartuffe's JavaScript injection uses an embedded
+JavaScript engine. Some Node.js specific APIs may not be available.</p>
+
+{{template "footer" .}}

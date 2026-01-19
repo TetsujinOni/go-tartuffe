@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 )
 
 // HomeResponse is the hypermedia response for GET /
@@ -25,6 +26,19 @@ type Link struct {
 
 // Home handles GET /
 func Home(w http.ResponseWriter, r *http.Request) {
+	// Content negotiation: HTML for browsers, JSON for API clients
+	if web.AcceptsHTML(r) {
+		data := web.HomePageData{
+			PageData: web.PageData{
+				Title:       "over the wire test doubles",
+				Description: "Placeholder description for the home page.",
+			},
+			Notices: []web.Notice{},
+		}
+		web.Render(w, "index.html", data)
+		return
+	}
+
 	baseURL := buildBaseURL(r)
 
 	resp := HomeResponse{

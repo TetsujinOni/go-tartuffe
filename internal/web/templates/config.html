@@ -1,0 +1,51 @@
+{{template "header" .}}
+
+<h1>Config</h1>
+
+<table>
+  <tr>
+    <td>version</td>
+    <td>{{.Version}}</td>
+  </tr>
+{{range $key, $value := .Options}}
+  <tr>
+    <td>{{$key}}</td>
+    <td>{{$value}}</td>
+  </tr>
+{{end}}
+</table>
+
+<h2>Process Information</h2>
+
+<table>
+  <tr>
+    <td>go version</td>
+    <td>{{.Process.GoVersion}}</td>
+  </tr>
+  <tr>
+    <td>architecture</td>
+    <td>{{.Process.Architecture}}</td>
+  </tr>
+  <tr>
+    <td>platform</td>
+    <td>{{.Process.Platform}}</td>
+  </tr>
+  <tr>
+    <td>rss</td>
+    <td>{{.Process.RSS}}</td>
+  </tr>
+  <tr>
+    <td>heapAlloc</td>
+    <td>{{.Process.HeapAlloc}}</td>
+  </tr>
+  <tr>
+    <td>uptime</td>
+    <td>{{.Process.Uptime}}</td>
+  </tr>
+  <tr>
+    <td>cwd</td>
+    <td>{{.Process.Cwd}}</td>
+  </tr>
+</table>
+
+{{template "footer" .}}

@@ -1,0 +1,63 @@
+{{template "header" .}}
+
+<h1>Behaviors</h1>
+
+<p>Behaviors are a way of post-processing the response returned by a stub. They provide
+additional functionality that allows you to modify responses in powerful ways.</p>
+
+<p>The following behaviors are supported:</p>
+
+<table>
+  <tr>
+    <th>Behavior</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/wait'><code>wait</code></a></td>
+    <td>Adds latency to a response by waiting a specified number of milliseconds before sending.</td>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/repeat'><code>repeat</code></a></td>
+    <td>Repeats a response a specified number of times before moving to the next response.</td>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/copy'><code>copy</code></a></td>
+    <td>Copies one or more values from the request into the response.</td>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/lookup'><code>lookup</code></a></td>
+    <td>Looks up a value from an external data source and replaces values in the response.</td>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/decorate'><code>decorate</code></a></td>
+    <td>Post-processes the response using JavaScript injection.</td>
+  </tr>
+  <tr>
+    <td><a href='/docs/api/behaviors/shellTransform'><code>shellTransform</code></a></td>
+    <td>Post-processes the response by piping it through a shell command.</td>
+  </tr>
+</table>
+
+<p>Multiple behaviors can be chained together. They execute in the order specified in the
+<code>behaviors</code> array.</p>
+
+<h2>Example</h2>
+
+<p>The following example shows a stub with a <code>wait</code> behavior that adds 500ms of latency:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "responses": [{
+      "is": {
+        "body": "Hello, world!"
+      },
+      "behaviors": [
+        { "wait": 500 }
+      ]
+    }]
+  }]
+}</code></pre>
+
+{{template "footer" .}}

@@ -1,0 +1,47 @@
+{{template "header" .}}
+
+<h1>Faults</h1>
+
+<p>Faults allow you to test how your application handles connection-level errors.
+Instead of returning a normal response, tartuffe can simulate various network faults.</p>
+
+<h2>Fault Types</h2>
+
+<table>
+  <tr>
+    <th>Fault</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>CONNECTION_RESET_BY_PEER</code></td>
+    <td>Resets the TCP connection, simulating a connection reset by the server.</td>
+  </tr>
+  <tr>
+    <td><code>RANDOM_DATA_THEN_CLOSE</code></td>
+    <td>Sends random binary data and then closes the connection.</td>
+  </tr>
+</table>
+
+<h2>Example</h2>
+
+<p>The following example simulates a connection reset:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "http",
+  "stubs": [{
+    "predicates": [{
+      "equals": { "path": "/fault" }
+    }],
+    "responses": [{
+      "fault": "CONNECTION_RESET_BY_PEER"
+    }]
+  }]
+}</code></pre>
+
+<p>When a request is made to <code>/fault</code>, the connection will be reset
+instead of receiving a normal HTTP response.</p>
+
+<!-- TODO: Verify tartuffe fault implementation matches mountebank -->
+
+{{template "footer" .}}

@@ -5,8 +5,10 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 	"github.com/TetsujinOni/go-tartuffe/pkg/version"
 )
 
@@ -81,6 +83,43 @@ func (c *Config) GetConfig(w http.ResponseWriter, r *http.Request) {
 				ipWhitelist = append(ipWhitelist, ip)
 			}
 		}
+	}
+
+	// Content negotiation: HTML for browsers, JSON for API clients
+	if web.AcceptsHTML(r) {
+		uptime := time.Now().Unix() - c.startTime
+		options := make(map[string]interface{})
+		options["port"] = c.port
+		options["host"] = c.host
+		options["allowInjection"] = c.allowInjection
+		options["localOnly"] = c.localOnly
+		options["debug"] = c.debug
+		if len(ipWhitelist) > 0 {
+			options["ipWhitelist"] = strings.Join(ipWhitelist, ", ")
+		}
+		if c.origin != "" {
+			options["origin"] = c.origin
+		}
+
+		data := web.ConfigPageData{
+			PageData: web.PageData{
+				Title:       "configuration",
+				Description: "Placeholder description for configuration page.",
+			},
+			Version: version.Version,
+			Options: options,
+			Process: web.ProcessInfo{
+				GoVersion:    runtime.Version(),
+				Architecture: runtime.GOARCH,
+				Platform:     runtime.GOOS,
+				RSS:          int64(m.Sys),
+				HeapAlloc:    int64(m.HeapAlloc),
+				Uptime:       uptime,
+				Cwd:          cwd,
+			},
+		}
+		web.Render(w, "config.html", data)
+		return
 	}
 
 	resp := ConfigResponse{

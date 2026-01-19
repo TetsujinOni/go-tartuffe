@@ -13,10 +13,11 @@ A timeline and summary of the AI-assisted port of mountebank from Node.js to Go.
 
 | Metric | Count |
 |--------|-------|
-| Go source files | 71 |
-| Lines of production code | ~12,238 |
+| Go source files | 76 |
+| HTML template files | 26 |
+| Lines of production code | ~12,500 |
 | Lines of test code | ~9,752 |
-| Total lines of Go | ~22,000 |
+| Total lines of Go | ~22,250 |
 | Integration test files | 19 |
 
 ## Session Timeline
@@ -99,7 +100,7 @@ A timeline and summary of the AI-assisted port of mountebank from Node.js to Go.
 ---
 
 ### Day 6: December 2, 2025
-**Session**: Production readiness (current)
+**Session**: Production readiness
 
 - Created Dockerfile with multi-stage build
 - Added .dockerignore for optimized builds
@@ -110,6 +111,32 @@ A timeline and summary of the AI-assisted port of mountebank from Node.js to Go.
 - Added CONTRIBUTING.md
 - Added SECURITY.md
 - Created this PORT-WORKLOG.md
+
+---
+
+### January 14, 2026
+**Session**: Web UI and Documentation Port
+
+- Ported mountebank web UI to Go templates (content negotiation HTML/JSON)
+- Created 20 documentation templates from mountebank EJS sources
+- Added documentation handler with wildcard route support
+- Updated layout navigation to link all documentation pages
+- Added TODO comments marking tartuffe vs mountebank behavioral differences
+
+**Documentation Templates Created**:
+- Core: gettingStarted, mentalModel, commandLine, security, faq
+- API: overview, stubs, predicates, mocks, injection, errors, faults
+- Predicates: xpath, jsonpath
+- Behaviors: overview
+- Proxies: overview
+- Protocols: http, https, tcp, smtp
+
+**Code Changes**:
+- `internal/web/web.go` - Extended template loading for nested docs
+- `internal/api/handlers/docs.go` - New docs handler with route mapping
+- `internal/api/server.go` - Added docs routes
+- `internal/api/router.go` - Added wildcard path support (`{path:.*}`)
+- `internal/web/templates/layout.html` - Updated navigation links
 
 ## Features Implemented
 

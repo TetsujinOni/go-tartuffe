@@ -1,0 +1,70 @@
+{{template "header" .}}
+
+<h1>Errors</h1>
+
+<p>When something goes wrong, tartuffe returns a JSON error response with diagnostic
+information to help you troubleshoot the problem.</p>
+
+<h2>Error Response Format</h2>
+
+<p>All error responses follow this format:</p>
+
+<pre><code>{
+  "errors": [{
+    "code": "error code",
+    "message": "Human-readable error message",
+    "source": "Optional source reference"
+  }]
+}</code></pre>
+
+<h2>Common Error Codes</h2>
+
+<table>
+  <tr>
+    <th>Code</th>
+    <th>HTTP Status</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>bad data</code></td>
+    <td>400</td>
+    <td>The request body contains invalid JSON or missing required fields</td>
+  </tr>
+  <tr>
+    <td><code>invalid injection</code></td>
+    <td>400</td>
+    <td>JavaScript injection is attempted but <code>--allowInjection</code> is not enabled</td>
+  </tr>
+  <tr>
+    <td><code>resource conflict</code></td>
+    <td>409</td>
+    <td>The requested port is already in use by another imposter</td>
+  </tr>
+  <tr>
+    <td><code>no such resource</code></td>
+    <td>404</td>
+    <td>The requested imposter does not exist</td>
+  </tr>
+  <tr>
+    <td><code>invalid protocol</code></td>
+    <td>400</td>
+    <td>The specified protocol is not supported</td>
+  </tr>
+</table>
+
+<h2>Example Error Response</h2>
+
+<p>If you try to create an imposter on a port that's already in use:</p>
+
+<pre><code>HTTP/1.1 409 Conflict
+Content-Type: application/json
+
+{
+  "errors": [{
+    "code": "resource conflict",
+    "message": "Port 4545 is already in use",
+    "source": {"port": 4545}
+  }]
+}</code></pre>
+
+{{template "footer" .}}

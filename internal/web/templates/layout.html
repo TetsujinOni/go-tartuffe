@@ -1,0 +1,100 @@
+{{define "header"}}
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Tartuffe - {{.Title}}</title>
+    <meta charset='utf-8'>
+    <meta name='description' content='{{.Description}}' />
+
+    <link rel='stylesheet' type='text/css' href='/public/css/application.css' />
+
+    <script src='https://code.jquery.com/jquery-3.6.1.min.js'></script>
+    <script src='/public/js/urlHashHandler.js'></script>
+  </head>
+  <body>
+    <div id='main'>
+      <header>
+        <a href='/'><h1 style='font-size: 2em; margin: 0;'>tartuffe</h1></a>
+        <p>over the wire test doubles</p>
+
+        <nav class='horizontal'>
+          <ul>
+            <li><a href='/'>home</a></li>
+            <li><a href='/imposters'>imposters</a></li>
+            <li><a href='/logs'>logs</a></li>
+            <li><a href='/config'>config</a></li>
+            <li><a href='/metrics' title='Prometheus metrics'>metrics</a></li>
+          </ul>
+        </nav>
+      </header>
+
+      <hr />
+
+      <div id='sidenav'>
+        <h3>documentation</h3>
+        <nav class='vertical'>
+          <ul>
+            <li><a href='/docs/gettingStarted'>getting started</a></li>
+            <li><a href='/docs/mentalModel'>mental model</a></li>
+            <li><a href='/docs/commandLine'>command line</a></li>
+            <li><a href='/docs/security'>security</a></li>
+            <li><a href='/docs/faq'>faqs</a></li>
+          </ul>
+
+          <p>api:</p>
+          <ul>
+            <li><a href='/docs/api/overview'>overview</a></li>
+            <li><a href='/docs/api/mocks'>mock verification</a></li>
+            <li><a href='/docs/api/stubs'>stub responses</a></li>
+            <li>
+              <ul>
+                <li><a href='/docs/api/proxies'>proxies</a></li>
+                <li><a href='/docs/api/injection'>injection</a></li>
+                <li><a href='/docs/api/behaviors'>behaviors</a></li>
+                <li><a href='/docs/api/faults'>faults</a></li>
+              </ul>
+            </li>
+            <li><a href='/docs/api/predicates'>stub predicates</a></li>
+            <li>
+              <ul>
+                <li><a href='/docs/api/predicates/xpath'>xpath</a></li>
+                <li><a href='/docs/api/predicates/jsonpath'>jsonpath</a></li>
+              </ul>
+            </li>
+            <li><a href='/docs/api/errors'>errors</a></li>
+          </ul>
+
+          <p>builtin protocols:</p>
+          <ul>
+            <li><a href='/docs/protocols/http'>http</a></li>
+            <li><a href='/docs/protocols/https'>https</a></li>
+            <li><a href='/docs/protocols/tcp'>tcp</a></li>
+            <li><a href='/docs/protocols/smtp'>smtp</a></li>
+          </ul>
+        </nav>
+      </div>
+
+      <div id='content'>
+{{end}}
+
+{{define "footer"}}
+      </div>
+    </div>
+
+    <hr />
+
+    <footer>
+      <nav class='horizontal'>
+        <ul>
+          <li>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</li>
+          <li><a href='#'>contributing</a></li>
+          <li><a href='#'>license</a></li>
+          <li><a href='#'>source</a></li>
+          <li><a href='#'>issues</a></li>
+        </ul>
+      </nav>
+    </footer>
+
+  </body>
+</html>
+{{end}}

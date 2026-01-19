@@ -1,0 +1,85 @@
+{{template "header" .}}
+
+<h1>https</h1>
+
+<p>The HTTPS protocol is identical to <a href='/docs/protocols/http'>HTTP</a> except that
+it uses TLS to encrypt the connection.</p>
+
+<h2>Imposter Creation Parameters</h2>
+
+<p>All <a href='/docs/protocols/http'>HTTP parameters</a> are supported, plus the following:</p>
+
+<table>
+  <tr>
+    <th>Parameter</th>
+    <th>Options</th>
+    <th>Required?</th>
+    <th>Default</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>protocol</code></td>
+    <td><code>https</code></td>
+    <td>Yes</td>
+    <td>N/A</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><code>key</code></td>
+    <td>PEM-formatted string</td>
+    <td>No</td>
+    <td>A default self-signed key</td>
+    <td>The SSL server private key</td>
+  </tr>
+  <tr>
+    <td><code>cert</code></td>
+    <td>PEM-formatted string</td>
+    <td>No</td>
+    <td>A default self-signed certificate</td>
+    <td>The SSL server certificate</td>
+  </tr>
+  <tr>
+    <td><code>mutualAuth</code></td>
+    <td><code>true</code> or <code>false</code></td>
+    <td>No</td>
+    <td>false</td>
+    <td>If true, the server will require client certificates</td>
+  </tr>
+</table>
+
+<h2>Example</h2>
+
+<p>The following example creates a basic HTTPS imposter with default certificates:</p>
+
+<pre><code>POST /imposters HTTP/1.1
+Host: localhost:2525
+Content-Type: application/json
+
+{
+  "port": 4545,
+  "protocol": "https",
+  "stubs": [{
+    "responses": [{
+      "is": {
+        "statusCode": 200,
+        "body": "Secure response!"
+      }
+    }]
+  }]
+}</code></pre>
+
+<h2>Using Custom Certificates</h2>
+
+<p>You can provide your own certificates for more realistic testing:</p>
+
+<pre><code>{
+  "port": 4545,
+  "protocol": "https",
+  "key": "-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----",
+  "cert": "-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----",
+  "stubs": [...]
+}</code></pre>
+
+<!-- TODO: Verify tartuffe TLS implementation details match mountebank -->
+
+{{template "footer" .}}

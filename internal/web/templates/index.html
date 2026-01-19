@@ -1,0 +1,30 @@
+{{template "header" .}}
+
+{{if .Notices}}
+<div id='notice'>
+{{range .Notices}}
+  <div><a href='#'>{{.Version}}</a> was released {{.When}}</div>
+{{end}}
+</div>
+{{end}}
+
+<h1>Welcome, friend</h1>
+
+<p>Tartuffe is far from the first open source tool for test-doubles. But it can stand in for Mountebank and not have the same pain points. 
+   No guarantee that it can cure what ails you, or Mountebank - but it tries to help. (After all, I'm not Moliere, <i>this</i> Tartuffe is meant to help.)</p>
+
+<h2>How it works</h2>
+
+<p>Tartuffe allows management of imposters in the same fashion as <a href="https://mbtest.dev">Mountebank</a>. Your test communicates
+to the server over http using the <a href='#'>api</a> to set up
+<a href='#'>stubs</a>, <a href='#'>record and replay proxies</a>,
+and verify <a href='#'>mock expectations</a> the same as Mountebank.</p>
+
+<p>Tartuffe focuses on providing the same depth of support for HTTP(s) and TCP, as well as an in-tree implementation of gRPC imposters. API-based management of gRPC imposters is a roadmap feature.</p>
+
+<h2>Why tartuffe?</h2>
+
+<p>An heretically mechanical replication of Mountebank, wire compatible with the API and serializations, rebuilt in Golang to alleviate some Node-ish pressure points.</p>
+<p>Use of agentic code generation to augment an engineer to implement a tool to imitate services for testing the purity of implementation seemed like a perfectly appropriate 
+  place for a project to reference the <a href="https://en.wikipedia.org/wiki/Tartuffe">work</a> in which an imposter of piety nearly destroys a family.</p>
+{{template "footer" .}}

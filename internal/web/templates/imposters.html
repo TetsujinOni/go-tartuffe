@@ -1,0 +1,27 @@
+{{template "header" .}}
+
+<link rel='stylesheet' type='text/css' href='/public/css/imposters.css' />
+
+<h1>Imposters</h1>
+
+<table id='imposters'>
+  <tr>
+    <th style='width: 15em;'>name</th>
+    <th style='width: 6em;'>protocol</th>
+    <th style='width: 5em;'>port</th>
+    <th style='width: 6em;'># requests</th>
+  </tr>
+
+  {{range .Imposters}}
+  <tr id='imposter-{{.Port}}'>
+    <td style='width: 15em;'><a href='{{.SelfHref}}'>
+      {{if .Name}}{{.Name}}{{else}}{{.Protocol}}:{{.Port}}{{end}}
+    </a></td>
+    <td style='width: 6em;'>{{.Protocol}}</td>
+    <td style='width: 5em;'>{{.Port}}</td>
+    <td style='width: 6em;'>{{.NumberOfRequests}}</td>
+  </tr>
+  {{end}}
+</table>
+
+{{template "footer" .}}

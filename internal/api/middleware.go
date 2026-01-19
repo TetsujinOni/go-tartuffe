@@ -12,6 +12,19 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
 )
 
+// StaticFiles middleware serves static files from /public/ path
+func StaticFiles(staticHandler http.Handler) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/public/") {
+				staticHandler.ServeHTTP(w, r)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // Logger middleware logs requests
 func Logger(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

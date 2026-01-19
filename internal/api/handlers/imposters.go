@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/TetsujinOni/go-tartuffe/internal/repository"
 	"github.com/TetsujinOni/go-tartuffe/internal/response"
+	"github.com/TetsujinOni/go-tartuffe/internal/web"
 )
 
 // ImpostersHandler handles imposter collection operations
@@ -34,6 +36,33 @@ func (h *ImpostersHandler) GetImposters(w http.ResponseWriter, r *http.Request) 
 	imposters, err := h.repo.All()
 	if err != nil {
 		response.WriteError(w, http.StatusInternalServerError, response.ErrCodeBadData, err.Error())
+		return
+	}
+
+	// Content negotiation: HTML for browsers, JSON for API clients
+	if web.AcceptsHTML(r) {
+		summaries := make([]web.ImposterSummary, len(imposters))
+		for i, imp := range imposters {
+			numReqs := 0
+			if imp.NumberOfRequests != nil {
+				numReqs = *imp.NumberOfRequests
+			}
+			summaries[i] = web.ImposterSummary{
+				Port:             imp.Port,
+				Protocol:         imp.Protocol,
+				Name:             imp.Name,
+				NumberOfRequests: numReqs,
+				SelfHref:         fmt.Sprintf("/imposters/%d", imp.Port),
+			}
+		}
+		data := web.ImpostersPageData{
+			PageData: web.PageData{
+				Title:       "running imposters",
+				Description: "Placeholder description for imposters page.",
+			},
+			Imposters: summaries,
+		}
+		web.Render(w, "imposters.html", data)
 		return
 	}
 
