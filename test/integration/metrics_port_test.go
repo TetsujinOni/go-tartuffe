@@ -39,12 +39,12 @@ func TestMetricsEndpoint_NoImposters(t *testing.T) {
 	}
 
 	// Without any imposters, there should be no imposter-specific metrics with labels
-	// Note: go-tartuffe uses "mountebank_" prefix, mountebank uses "mb_"
+	// Note: go-tartuffe uses "mb_" prefix to match mountebank
 	// These should NOT appear with imposter labels when no imposters exist
-	if strings.Contains(metricsBody, `port="`) {
-		// If there are port-labeled metrics, there shouldn't be any when no imposters exist
+	if strings.Contains(metricsBody, `imposter="`) {
+		// If there are imposter-labeled metrics, there shouldn't be any when no imposters exist
 		// (except possibly from previous test runs in the same process)
-		t.Log("Note: found port-labeled metrics, may be from previous test runs")
+		t.Log("Note: found imposter-labeled metrics, may be from previous test runs")
 	}
 }
 
@@ -88,10 +88,10 @@ func TestMetricsEndpoint_ImposterNotCalled(t *testing.T) {
 	}
 
 	// Imposter-specific metrics with this port shouldn't exist yet (no requests made)
-	// go-tartuffe tracks: mountebank_requests_total, mountebank_response_duration_seconds, mountebank_no_match_total
-	if strings.Contains(metricsBody, `port="7100"`) && strings.Contains(metricsBody, "mountebank_requests_total") {
+	// go-tartuffe tracks: mb_requests_total, mb_response_generation_duration_seconds, mb_no_match_total
+	if strings.Contains(metricsBody, `imposter="7100"`) && strings.Contains(metricsBody, "mb_requests_total") {
 		// Check if it has a non-zero value - it shouldn't
-		t.Log("Note: port metrics exist, checking if requests were tracked before any calls")
+		t.Log("Note: imposter metrics exist, checking if requests were tracked before any calls")
 	}
 }
 
@@ -143,29 +143,29 @@ func TestMetricsEndpoint_AfterImposterCalled(t *testing.T) {
 	}
 
 	// After calling the imposter, should have metrics with this port
-	// go-tartuffe metrics use "mountebank_" prefix
+	// go-tartuffe metrics use "mb_" prefix to match mountebank's Prometheus format
 	// Mountebank expects: mb_predicate_match_duration_seconds, mb_no_match_total, mb_response_generation_duration_seconds
 
-	// Check for request counter with port label
-	if !strings.Contains(metricsBody, `port="7101"`) {
-		t.Error("expected metrics with port=7101 label after calling imposter")
+	// Check for request counter with imposter label (go-tartuffe uses "imposter" not "port")
+	if !strings.Contains(metricsBody, `imposter="7101"`) {
+		t.Error("expected metrics with imposter=7101 label after calling imposter")
 	}
 
 	// Check for specific metric types that should exist after a request
-	if !strings.Contains(metricsBody, "mountebank_requests_total") {
-		t.Error("expected mountebank_requests_total metric")
+	if !strings.Contains(metricsBody, "mb_requests_total") {
+		t.Error("expected mb_requests_total metric")
 	}
 
 	// Check for response duration metrics
-	if !strings.Contains(metricsBody, "mountebank_response_duration_seconds") {
-		t.Error("expected mountebank_response_duration_seconds metric")
+	if !strings.Contains(metricsBody, "mb_response_generation_duration_seconds") {
+		t.Error("expected mb_response_generation_duration_seconds metric")
 	}
 
 	// Verify the request was counted (should have at least 1)
-	if !strings.Contains(metricsBody, `mountebank_requests_total{port="7101",protocol="http"} 1`) {
+	if !strings.Contains(metricsBody, `mb_requests_total{imposter="7101",protocol="http"} 1`) {
 		// May have more than 1 if tests ran before, just check it exists with a value
-		if !strings.Contains(metricsBody, `mountebank_requests_total{port="7101",protocol="http"}`) {
-			t.Error("expected mountebank_requests_total to show count for port 7101")
+		if !strings.Contains(metricsBody, `mb_requests_total{imposter="7101",protocol="http"}`) {
+			t.Error("expected mb_requests_total to show count for port 7101")
 		}
 	}
 }

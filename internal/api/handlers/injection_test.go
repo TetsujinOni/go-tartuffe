@@ -28,7 +28,7 @@ func TestCreateImposterWithInjection(t *testing.T) {
 			name: "predicate injection",
 			body: `{
 				"protocol": "http",
-				"port": 3000,
+				"port": 31000,
 				"stubs": [{
 					"predicates": [{"inject": "function(request) { return request.path === '/test'; }"}],
 					"responses": [{"is": {"body": "MATCHED"}}]
@@ -55,7 +55,7 @@ func TestCreateImposterWithInjection(t *testing.T) {
 			name: "response injection",
 			body: `{
 				"protocol": "http",
-				"port": 3001,
+				"port": 31001,
 				"stubs": [{
 					"responses": [{"inject": "function(request) { return {body: 'INJECTED'}; }"}]
 				}]
@@ -75,7 +75,7 @@ func TestCreateImposterWithInjection(t *testing.T) {
 			name: "combined predicate and response injection",
 			body: `{
 				"protocol": "http",
-				"port": 3002,
+				"port": 31002,
 				"stubs": [{
 					"predicates": [{"inject": "config => config.request.path === '/api'"}],
 					"responses": [{"inject": "config => ({body: config.request.method})"}]
@@ -99,7 +99,7 @@ func TestCreateImposterWithInjection(t *testing.T) {
 			name: "old interface (single argument)",
 			body: `{
 				"protocol": "http",
-				"port": 3003,
+				"port": 31003,
 				"stubs": [{
 					"responses": [{"inject": "function(request) { return {body: request.method}; }"}]
 				}]
@@ -119,7 +119,7 @@ func TestCreateImposterWithInjection(t *testing.T) {
 			name: "new interface (config argument)",
 			body: `{
 				"protocol": "http",
-				"port": 3004,
+				"port": 31004,
 				"stubs": [{
 					"responses": [{"inject": "config => ({body: config.request.method})"}]
 				}]
@@ -170,7 +170,7 @@ func TestInjectionWithEndOfRequestResolver(t *testing.T) {
 
 	body := `{
 		"protocol": "tcp",
-		"port": 3000,
+		"port": 31010,
 		"mode": "text",
 		"endOfRequestResolver": {
 			"inject": "function(requestData, logger) { return requestData.indexOf('END') > -1; }"
@@ -222,7 +222,7 @@ func TestInjectionValidationNonStrict(t *testing.T) {
 			name: "invalid JavaScript should still create imposter",
 			body: `{
 				"protocol": "http",
-				"port": 3000,
+				"port": 31020,
 				"stubs": [{
 					"responses": [{"inject": "return true;"}]
 				}]
@@ -233,7 +233,7 @@ func TestInjectionValidationNonStrict(t *testing.T) {
 			name: "syntax error should still create imposter",
 			body: `{
 				"protocol": "http",
-				"port": 3001,
+				"port": 31021,
 				"stubs": [{
 					"responses": [{"inject": "function() { throw new Error('BOOM'); }"}]
 				}]

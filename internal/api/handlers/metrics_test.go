@@ -54,7 +54,7 @@ func TestMetricsEndpoint_ImposterNotCalled(t *testing.T) {
 
 	// Create an imposter but don't call it
 	imp := &models.Imposter{
-		Port:     3001,
+		Port:     31101,
 		Protocol: "http",
 		Stubs:    []models.Stub{},
 	}
@@ -72,15 +72,15 @@ func TestMetricsEndpoint_ImposterNotCalled(t *testing.T) {
 	body := w.Body.String()
 
 	// Imposter exists but hasn't been called, so no imposter-specific metrics
-	if strings.Contains(body, `mb_predicate_match_duration_seconds`) && strings.Contains(body, `imposter`) && strings.Contains(body, `3001`) {
+	if strings.Contains(body, `mb_predicate_match_duration_seconds`) && strings.Contains(body, `imposter`) && strings.Contains(body, `31101`) {
 		t.Error("Should not include mb_predicate_match_duration_seconds for uncalled imposter")
 	}
 
-	if strings.Contains(body, `mb_no_match_total`) && strings.Contains(body, `imposter`) && strings.Contains(body, `3001`) {
+	if strings.Contains(body, `mb_no_match_total`) && strings.Contains(body, `imposter`) && strings.Contains(body, `31101`) {
 		t.Error("Should not include mb_no_match_total for uncalled imposter")
 	}
 
-	if strings.Contains(body, `mb_response_generation_duration_seconds`) && strings.Contains(body, `imposter`) && strings.Contains(body, `3001`) {
+	if strings.Contains(body, `mb_response_generation_duration_seconds`) && strings.Contains(body, `imposter`) && strings.Contains(body, `31101`) {
 		t.Error("Should not include mb_response_generation_duration_seconds for uncalled imposter")
 	}
 
@@ -144,7 +144,7 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 	impostersHandler := NewImpostersHandler(repo, manager, 2525)
 
 	// Create an imposter
-	impJSON := `{"protocol": "http", "port": 3005, "stubs": []}`
+	impJSON := `{"protocol": "http", "port": 31105, "stubs": []}`
 	createReq := httptest.NewRequest("POST", "/imposters", strings.NewReader(impJSON))
 	createW := httptest.NewRecorder()
 	impostersHandler.CreateImposter(createW, createReq)
@@ -158,7 +158,7 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 
 	// Make a request to the imposter
 	client := &http.Client{Timeout: 1 * time.Second}
-	resp, err := client.Get("http://localhost:3005/test")
+	resp, err := client.Get("http://localhost:31105/test")
 	if err != nil {
 		t.Logf("Request to imposter failed (expected if server not started): %v", err)
 	} else {
@@ -182,5 +182,5 @@ func TestMetricsEndpoint_Integration(t *testing.T) {
 	// For a true integration test, we'd need the full server running
 
 	// Cleanup
-	manager.Stop(3005)
+	manager.Stop(31105)
 }
