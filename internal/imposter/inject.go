@@ -441,18 +441,45 @@ func (e *JSEngine) ExecutePredicateGenerator(script string, req *models.Request)
 
 // ExecuteEndOfRequestResolver executes the resolver script to determine if request is complete
 // Returns true if the accumulated data represents a complete request
-func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string) (bool, error) {
+// For binary mode, rawData is passed as a Buffer to JavaScript
+// For text mode, rawData is passed as a string
+func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, isBinary bool) (bool, error) {
 	vm := goja.New()
 	new(require.Registry).Enable(vm)
 	buffer.Enable(vm)
 
 	jsLogger := NewJSLogger("inject:endOfRequestResolver")
-
-	// Set up the request data
-	vm.Set("requestData", requestData)
 	vm.Set("logger", jsLogger.createLoggerObject())
 
-	// Wrap the script in a function call
+	// Set up the request data based on mode
+	// For binary mode, we need to create a Buffer from the raw bytes
+	// For text mode, we pass the data as a string
+	if isBinary {
+		// Pass raw bytes to JavaScript - they will be converted to Buffer
+		vm.Set("rawBytes", rawData)
+
+		// Wrap the script in a function call that creates a Buffer from raw bytes
+		wrappedScript := fmt.Sprintf(`
+			(function() {
+				var requestData = Buffer.from(rawBytes);
+				var fn = %s;
+				return fn(requestData, logger);
+			})()
+		`, script)
+
+		result, err := vm.RunString(wrappedScript)
+		if err != nil {
+			dataPreview := fmt.Sprintf("[binary data, %d bytes]", len(rawData))
+			return false, formatJSError(err, script, dataPreview)
+		}
+
+		return result.ToBoolean(), nil
+	}
+
+	// Text mode - pass as string
+	requestData := string(rawData)
+	vm.Set("requestData", requestData)
+
 	wrappedScript := fmt.Sprintf(`
 		(function() {
 			var fn = %s;
@@ -462,7 +489,6 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, requestData string
 
 	result, err := vm.RunString(wrappedScript)
 	if err != nil {
-		// Include preview of request data for debugging
 		dataPreview := requestData
 		if len(dataPreview) > 50 {
 			dataPreview = dataPreview[:50] + "..."

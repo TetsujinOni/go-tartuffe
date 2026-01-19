@@ -82,19 +82,20 @@ func (m *Matcher) Match(req *models.Request) *MatchResult {
 	}
 
 	// No match - return default response or empty 200
+	// Use StubIndex of -1 to signal no match
 	if m.imposter.DefaultResponse != nil {
 		if m.imposter.DefaultResponse.Is != nil {
-			return &MatchResult{Response: m.imposter.DefaultResponse.Is}
+			return &MatchResult{Response: m.imposter.DefaultResponse.Is, StubIndex: -1}
 		}
 		if m.imposter.DefaultResponse.Proxy != nil {
-			return &MatchResult{Proxy: m.imposter.DefaultResponse.Proxy}
+			return &MatchResult{Proxy: m.imposter.DefaultResponse.Proxy, StubIndex: -1}
 		}
 		if m.imposter.DefaultResponse.Inject != "" {
-			return &MatchResult{Inject: m.imposter.DefaultResponse.Inject}
+			return &MatchResult{Inject: m.imposter.DefaultResponse.Inject, StubIndex: -1}
 		}
 	}
 
-	return &MatchResult{Response: &models.IsResponse{StatusCode: 200}}
+	return &MatchResult{Response: &models.IsResponse{StatusCode: 200}, StubIndex: -1}
 }
 
 // getMatchResult creates a MatchResult from a stub

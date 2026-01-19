@@ -4,14 +4,14 @@ Remaining work to improve mountebank API compatibility.
 
 ## Current Status
 
-**Progress**: 215/252 passing (85.3%) | 215/236 adjusted (91.1%) ✅ **TARGET EXCEEDED**
+**Progress**: 216/252 passing (85.7%) | 216/237 adjusted (91.1%) ✅ **TARGET EXCEEDED**
 **Target**: 75%+ compatibility
-**Last Validation**: 2026-01-18
+**Last Validation**: 2026-01-19
 
-## Remaining Failures: 37 Tests
+## Remaining Failures: 36 Tests
 
 **Breakdown**:
-- Actionable: 22 tests (see below)
+- Actionable: 21 tests (see below)
 - Security/Architectural (Won't Fix): 14 tests
 - Deliberate Design Difference: 1 test
 
@@ -19,14 +19,7 @@ Remaining work to improve mountebank API compatibility.
 
 ## Actionable Failures by Priority
 
-### P0 - Critical (3 tests)
-
-#### HTTP Metrics API (1 test)
-- **Status**: Metrics tracked but endpoint not exposed
-- **Test**: `should return imposter metrics after imposters calls`
-- **File**: `mbTest/api/http/httpMetricsTest.js`
-- **Work**: Create API handler to expose metrics in mountebank-compatible JSON format
-- **Notes**: Prometheus metrics exist in `internal/metrics/metrics.go`, just need API endpoint
+### P0 - Critical (2 tests)
 
 #### TCP endOfRequestResolver (2 tests)
 - **Status**: Model exists, not implemented

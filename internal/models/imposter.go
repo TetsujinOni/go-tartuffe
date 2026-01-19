@@ -144,20 +144,50 @@ func (imp *Imposter) MarshalJSON() ([]byte, error) {
 		data["stubs"] = []interface{}{}
 	}
 
-	// Handle requests array carefully:
-	// - If Requests is nil (explicitly set to nil in replayable mode): omit from JSON
-	// - If Requests is non-nil empty slice (non-replayable mode): include as empty array
+	// Handle requests array for mountebank compatibility:
+	// Mountebank uses "requests" for all protocols, but we store them in separate fields.
+	// TCP uses TCPRequests, SMTP uses SMTPRequests, etc.
+	// We need to normalize to "requests" in JSON output.
 
-	// CRITICAL: Remove requests from map if it exists and Requests field is nil
-	// This handles the case where omitempty didn't omit an empty non-nil slice
-	// that was later set to nil (replayable mode)
-	if imp.Requests == nil {
-		// Explicitly remove requests from the map to ensure it doesn't appear in JSON
-		delete(data, "requests")
-	} else if len(imp.Requests) == 0 {
-		// Non-nil empty slice: ensure it appears in output
-		if _, ok := data["requests"]; !ok {
+	// Remove protocol-specific request fields from output
+	delete(data, "tcpRequests")
+	delete(data, "smtpRequests")
+	delete(data, "grpcRequests")
+
+	// Determine which requests to use based on protocol
+	switch imp.Protocol {
+	case "tcp":
+		if imp.TCPRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.TCPRequests) == 0 {
 			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.TCPRequests
+		}
+	case "smtp":
+		if imp.SMTPRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.SMTPRequests) == 0 {
+			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.SMTPRequests
+		}
+	case "grpc":
+		if imp.GRPCRequests == nil {
+			delete(data, "requests")
+		} else if len(imp.GRPCRequests) == 0 {
+			data["requests"] = []interface{}{}
+		} else {
+			data["requests"] = imp.GRPCRequests
+		}
+	default:
+		// HTTP/HTTPS - use Requests field
+		if imp.Requests == nil {
+			delete(data, "requests")
+		} else if len(imp.Requests) == 0 {
+			if _, ok := data["requests"]; !ok {
+				data["requests"] = []interface{}{}
+			}
 		}
 	}
 

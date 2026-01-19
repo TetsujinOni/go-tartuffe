@@ -99,16 +99,16 @@ func TestSMTP_RecordEmail(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", getResp.StatusCode)
 	}
 
-	smtpRequests, ok := body["smtpRequests"].([]interface{})
+	requests, ok := body["requests"].([]interface{})
 	if !ok {
-		t.Fatal("expected smtpRequests array")
+		t.Fatal("expected requests array")
 	}
 
-	if len(smtpRequests) != 1 {
-		t.Fatalf("expected 1 recorded request, got %d", len(smtpRequests))
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 recorded request, got %d", len(requests))
 	}
 
-	req := smtpRequests[0].(map[string]interface{})
+	req := requests[0].(map[string]interface{})
 
 	// Verify envelope
 	if req["envelopeFrom"] != "sender@test.com" {
@@ -165,8 +165,8 @@ func TestSMTP_MultipleRecipients(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", getResp.StatusCode)
 	}
 
-	smtpRequests := body["smtpRequests"].([]interface{})
-	req := smtpRequests[0].(map[string]interface{})
+	requests := body["requests"].([]interface{})
+	req := requests[0].(map[string]interface{})
 
 	envelopeTo, ok := req["envelopeTo"].([]interface{})
 	if !ok || len(envelopeTo) != 3 {
@@ -214,9 +214,9 @@ func TestSMTP_RequestCount(t *testing.T) {
 		t.Errorf("expected numberOfRequests 3, got %v", body["numberOfRequests"])
 	}
 
-	smtpRequests, ok := body["smtpRequests"].([]interface{})
-	if !ok || len(smtpRequests) != 3 {
-		t.Errorf("expected 3 recorded requests, got %d", len(smtpRequests))
+	requests, ok := body["requests"].([]interface{})
+	if !ok || len(requests) != 3 {
+		t.Errorf("expected 3 recorded requests, got %d", len(requests))
 	}
 }
 
@@ -253,8 +253,8 @@ func TestSMTP_HTMLEmail(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", getResp.StatusCode)
 	}
 
-	smtpRequests := body["smtpRequests"].([]interface{})
-	req := smtpRequests[0].(map[string]interface{})
+	requests := body["requests"].([]interface{})
+	req := requests[0].(map[string]interface{})
 
 	// HTML content should be in html field
 	if req["html"] != "<html><body><h1>Hello</h1></body></html>" {
@@ -476,9 +476,9 @@ func TestSMTP_PredicateMatching(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", getResp.StatusCode)
 	}
 
-	smtpRequests := body["smtpRequests"].([]interface{})
-	if len(smtpRequests) != 1 {
-		t.Errorf("expected 1 recorded request, got %d", len(smtpRequests))
+	requests := body["requests"].([]interface{})
+	if len(requests) != 1 {
+		t.Errorf("expected 1 recorded request, got %d", len(requests))
 	}
 }
 

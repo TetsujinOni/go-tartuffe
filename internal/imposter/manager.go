@@ -598,17 +598,19 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 
-	// Find matching stub
+	// Find matching stub and record predicate match duration
+	predicateStart := time.Now()
 	match := s.matcher.Match(req)
+	metrics.RecordPredicateMatchDuration(s.imposter.Protocol, portStr, time.Since(predicateStart).Seconds())
 
 	// Record no-match if no stub matched
 	if match.StubIndex < 0 {
-		metrics.RecordNoMatch(portStr)
+		metrics.RecordNoMatch(s.imposter.Protocol, portStr)
 	}
 
 	// Defer response duration recording
 	defer func() {
-		metrics.RecordResponseDuration(portStr, time.Since(startTime).Seconds())
+		metrics.RecordResponseDuration(s.imposter.Protocol, portStr, time.Since(startTime).Seconds())
 	}()
 
 	// Handle fault responses first (they hijack the connection)

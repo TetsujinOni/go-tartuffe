@@ -365,15 +365,9 @@ func (s *TCPServer) readRequest(conn net.Conn) ([]byte, error) {
 			accumulated = append(accumulated, buffer[:n]...)
 
 			// Check if request is complete using the resolver
-			// Convert accumulated data to string for resolver
-			var dataStr string
-			if s.imposter.Mode == "binary" {
-				dataStr = base64.StdEncoding.EncodeToString(accumulated)
-			} else {
-				dataStr = string(accumulated)
-			}
-
-			complete, resolverErr := s.jsEngine.ExecuteEndOfRequestResolver(resolver.Inject, dataStr)
+			// Pass raw bytes and binary mode flag to the resolver
+			isBinary := s.imposter.Mode == "binary"
+			complete, resolverErr := s.jsEngine.ExecuteEndOfRequestResolver(resolver.Inject, accumulated, isBinary)
 			if resolverErr != nil {
 				// Resolver error - treat current data as complete request
 				return accumulated, nil

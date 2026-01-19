@@ -1,7 +1,7 @@
 # Mountebank API Test Suite Mapping
 
-**Current Status**: 215/252 passing (85.3%)
-**Date**: 2026-01-18
+**Current Status**: 216/252 passing (85.7%)
+**Date**: 2026-01-19
 **Mountebank Version**: 2.9.3
 **Test Command**: `MB_EXECUTABLE=/path/to/tartuffe-wrapper.sh npm run test:api`
 
@@ -18,12 +18,12 @@
 | **HTTP Injection** | 9/13 | 4 | 13 | 69% | ❌ process object, async injection |
 | **HTTP Predicates** | 27/27 | 0 | 27 | 100% | ✅ Complete |
 | **HTTP Fault** | 2/3 | 1 | 3 | 67% | ❌ Undefined fault handling |
-| **HTTP Metrics** | 2/3 | 1 | 3 | 67% | ❌ Metrics endpoint |
+| **HTTP Metrics** | 3/3 | 0 | 3 | 100% | ✅ Complete |
 | **SMTP** | 3/3 | 0 | 3 | 100% | ✅ Complete |
 | **TCP Imposter** | 6/15 | 9 | 15 | 40% | ❌ Multiple failures (see below) |
 | **TCP Proxy** | 0/4 | 4 | 4 | 0% | ❌ Not implemented |
 | **TCP Injection** | 0/1 | 1 | 1 | 0% | ❌ Not implemented |
-| **TOTAL** | **215** | **37** | **252** | **85.3%** | Target: 75%+ ✅ |
+| **TOTAL** | **216** | **36** | **252** | **85.7%** | Target: 75%+ ✅ |
 
 ## Detailed Failure Analysis
 
@@ -74,12 +74,6 @@ These tests run for both HTTP and HTTPS:
 |-----------|--------|--------|----------|
 | should support sending key/cert pair during imposter creation | ❌ Fail | Certificate handling issue | P1 |
 | should support proxying to origin server requiring mutual auth | ❌ Fail | mTLS proxy support | P1 |
-
-### HTTP Metrics Failure (1 failure)
-
-| Test Name | Status | Reason | Priority |
-|-----------|--------|--------|----------|
-| should return imposter metrics after imposters calls | ❌ Fail | Metrics API endpoint not exposed | P0 |
 
 ### TCP Imposter Failures (9 failures)
 

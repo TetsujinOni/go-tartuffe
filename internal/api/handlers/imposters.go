@@ -316,6 +316,9 @@ func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptio
 	// In replayable mode, exclude requests, links, and request counter
 	if options.Replayable {
 		result.Requests = nil
+		result.TCPRequests = nil
+		result.SMTPRequests = nil
+		result.GRPCRequests = nil
 		result.Links = nil
 		result.NumberOfRequests = nil
 	} else {
@@ -327,8 +330,24 @@ func applyOptionsWithRequest(imp *models.Imposter, options models.SerializeOptio
 
 		// Ensure requests array exists in non-replayable mode (even if empty)
 		// This is required for mountebank compatibility
-		if result.Requests == nil {
-			result.Requests = []models.Request{}
+		// The MarshalJSON will serialize the appropriate field as "requests" for each protocol
+		switch result.Protocol {
+		case "tcp":
+			if result.TCPRequests == nil {
+				result.TCPRequests = []models.TCPRequest{}
+			}
+		case "smtp":
+			if result.SMTPRequests == nil {
+				result.SMTPRequests = []models.SMTPRequest{}
+			}
+		case "grpc":
+			if result.GRPCRequests == nil {
+				result.GRPCRequests = []models.GRPCRequest{}
+			}
+		default:
+			if result.Requests == nil {
+				result.Requests = []models.Request{}
+			}
 		}
 	}
 
