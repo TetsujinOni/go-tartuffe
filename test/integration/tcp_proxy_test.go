@@ -462,10 +462,12 @@ func TestTCP_ProxyEndOfRequestResolver(t *testing.T) {
 func TestTCP_ProxyProtocolValidation(t *testing.T) {
 	defer cleanup(t)
 
-	// Try to create TCP proxy pointing to HTTP endpoint
-	proxyResp, body, err := post("/imposters", map[string]interface{}{
+	// Create TCP proxy pointing to HTTP endpoint (non-TCP protocol)
+	// The imposter is created successfully, but returns error at runtime
+	proxyPort := 6009
+	proxyResp, _, err := post("/imposters", map[string]interface{}{
 		"protocol": "tcp",
-		"port":     6009,
+		"port":     proxyPort,
 		"stubs": []map[string]interface{}{
 			{
 				"responses": []map[string]interface{}{
@@ -481,17 +483,56 @@ func TestTCP_ProxyProtocolValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to make request: %v", err)
 	}
-
-	// Should return error for invalid protocol
-	if proxyResp.StatusCode == 201 {
-		t.Errorf("expected error for non-TCP protocol, got 201")
+	if proxyResp.StatusCode != 201 {
+		t.Fatalf("expected status 201, got %d", proxyResp.StatusCode)
 	}
 
-	// Check error message
-	if errors, ok := body["errors"].([]interface{}); ok && len(errors) > 0 {
-		// Valid error response
-	} else {
-		t.Logf("Warning: expected error response for non-TCP protocol")
+	time.Sleep(100 * time.Millisecond)
+
+	// Connect and send a request - should get error response at runtime
+	conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", proxyPort))
+	if err != nil {
+		t.Fatalf("failed to connect to proxy: %v", err)
+	}
+	defer conn.Close()
+
+	_, err = conn.Write([]byte("test"))
+	if err != nil {
+		t.Fatalf("failed to write to proxy: %v", err)
+	}
+
+	// Should receive JSON error response for non-TCP protocol
+	buffer := make([]byte, 1024)
+	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
+	n, err := conn.Read(buffer)
+
+	if err != nil {
+		t.Fatalf("expected error response, got read error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected error response, got empty response")
+	}
+
+	// Parse and validate the error response
+	response := string(buffer[:n])
+	var errorResp struct {
+		Errors []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(buffer[:n], &errorResp); err != nil {
+		t.Fatalf("failed to parse error response: %v, response was: %s", err, response)
+	}
+
+	if len(errorResp.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errorResp.Errors))
+	}
+	if errorResp.Errors[0].Code != "invalid proxy" {
+		t.Errorf("expected error code 'invalid proxy', got %q", errorResp.Errors[0].Code)
+	}
+	if !strings.Contains(errorResp.Errors[0].Message, "Unable to proxy to any protocol other than tcp") {
+		t.Errorf("expected message about non-tcp protocol, got %q", errorResp.Errors[0].Message)
 	}
 }
 
