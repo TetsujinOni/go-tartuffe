@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 )
 
@@ -62,7 +63,7 @@ type Response struct {
 	Inject    string         `json:"inject,omitempty"`
 	Fault     string         `json:"fault,omitempty"`
 	Repeat    int            `json:"repeat,omitempty"`
-	Behaviors []Behavior     `json:"_behaviors,omitempty"`
+	Behaviors []Behavior     `json:"behaviors,omitempty"` // Output as "behaviors", input accepts both "behaviors" and "_behaviors"
 
 	// Internal: tracks if this was parsed from shorthand format
 	isShorthand bool `json:"-"`
@@ -105,7 +106,7 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 				}
 				behaviorArray = append(behaviorArray, behaviorObj)
 			}
-			raw["_behaviors"] = behaviorArray
+			raw["behaviors"] = behaviorArray
 		case []interface{}:
 			// Already an array
 			// Extract repeat from first behavior if present
@@ -116,11 +117,18 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 					}
 				}
 			}
-			raw["_behaviors"] = v
+			raw["behaviors"] = v
+		case nil:
+			// Null is valid - behaviors will be empty
+			delete(raw, "_behaviors")
+			delete(raw, "behaviors")
+		default:
+			// Invalid type (string, number, boolean) - reject
+			return fmt.Errorf("'_behaviors' must be an object or array")
 		}
 
-		// Remove "behaviors" field if it exists (we've normalized to "_behaviors")
-		delete(raw, "behaviors")
+		// Remove "_behaviors" field if it exists (we've normalized to "behaviors")
+		delete(raw, "_behaviors")
 	}
 
 	// Re-marshal with normalized behaviors
@@ -189,6 +197,9 @@ type IsResponse struct {
 	Body          interface{}            `json:"body,omitempty"`
 	Data          string                 `json:"data,omitempty"` // For TCP protocol
 	Mode          string                 `json:"_mode,omitempty"`
+
+	// Proxy response time tracking (used with addWaitBehavior)
+	ProxyResponseTime int `json:"_proxyResponseTime,omitempty"`
 
 	// gRPC streaming support
 	Stream []interface{} `json:"stream,omitempty"` // Array of messages for server streaming

@@ -10,7 +10,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -576,6 +578,12 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Handle HTTP CONNECT method for tunnel proxying
+	if r.Method == "CONNECT" {
+		s.handleConnect(w, r)
+		return
+	}
+
 	// Convert HTTP request to our Request model
 	req, err := models.NewRequestFromHTTP(r)
 	if err != nil {
@@ -627,6 +635,23 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Handle proxy response
 		proxyResult, err := s.proxyHandler.Execute(req, match.Proxy, r)
 		if err != nil {
+			// Check for ProxyError with specific error code
+			var proxyErr *ProxyError
+			if errors.As(err, &proxyErr) {
+				// Return mountebank-compatible error format
+				w.Header().Set("Content-Type", "application/json; charset=utf-8")
+				w.WriteHeader(http.StatusInternalServerError)
+				errorResp := map[string]interface{}{
+					"errors": []map[string]interface{}{
+						{
+							"code":    proxyErr.Code,
+							"message": proxyErr.Message,
+						},
+					},
+				}
+				json.NewEncoder(w).Encode(errorResp)
+				return
+			}
 			http.Error(w, fmt.Sprintf("proxy error: %v", err), http.StatusBadGateway)
 			return
 		}
@@ -743,6 +768,16 @@ func (s *Server) mergeWithDefault(resp, defaultResp *models.IsResponse) *models.
 
 // handleFault handles fault injection responses
 func (s *Server) handleFault(w http.ResponseWriter, fault string) {
+	// Check if this is a known fault type - unknown types return normal empty response
+	switch fault {
+	case models.FaultConnectionResetByPeer, models.FaultRandomDataThenClose:
+		// Known fault type - proceed with hijacking
+	default:
+		// Unknown fault type - return normal empty response (do nothing)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
 	// Get the underlying connection using Hijacker
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
@@ -773,11 +808,58 @@ func (s *Server) handleFault(w http.ResponseWriter, fault string) {
 		}
 		conn.Write(garbage)
 		conn.Close()
-
-	default:
-		// Unknown fault type - just close gracefully
-		conn.Close()
 	}
+}
+
+// handleConnect handles HTTP CONNECT method for tunnel proxying
+// Mountebank approach: instead of tunneling to the CONNECT target,
+// we loop back to the imposter itself so that subsequent requests
+// can be processed by proxy stubs.
+func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
+	// Get the imposter's address for loopback connection
+	// We need to connect back to ourselves so the subsequent request
+	// goes through normal stub matching (including proxy stubs)
+	localAddr := fmt.Sprintf("localhost:%d", s.imposter.Port)
+
+	// Connect back to the imposter itself using plain TCP
+	// The client will do its own TLS handshake through the tunnel if needed
+	loopbackConn, err := net.DialTimeout("tcp", localAddr, 10*time.Second)
+
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to establish tunnel: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	// Hijack the client connection
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		loopbackConn.Close()
+		http.Error(w, "Hijacking not supported", http.StatusInternalServerError)
+		return
+	}
+
+	clientConn, _, err := hijacker.Hijack()
+	if err != nil {
+		loopbackConn.Close()
+		http.Error(w, fmt.Sprintf("Hijack failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Send 200 Connection Established response
+	clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
+
+	// Create bidirectional tunnel between client and loopback
+	go func() {
+		defer loopbackConn.Close()
+		defer clientConn.Close()
+		io.Copy(loopbackConn, clientConn)
+	}()
+
+	go func() {
+		defer loopbackConn.Close()
+		defer clientConn.Close()
+		io.Copy(clientConn, loopbackConn)
+	}()
 }
 
 // predicatesEqual compares two predicate slices for equality

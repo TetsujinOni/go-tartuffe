@@ -15,7 +15,7 @@ type SMTPRequest struct {
 	References   []string         `json:"references"`             // Email references (always include, even if empty)
 	InReplyTo    []string         `json:"inReplyTo"`              // In-Reply-To values (always include, even if empty)
 	Text         string           `json:"text,omitempty"`         // Plain text body
-	Html         string           `json:"html,omitempty"`         // HTML body
+	Html         string           `json:"html"`                   // HTML body (always include, even if empty)
 	Attachments  []SMTPAttachment `json:"attachments"`            // Email attachments (always include, even if empty)
 	Timestamp    string           `json:"timestamp,omitempty"`    // When received
 }

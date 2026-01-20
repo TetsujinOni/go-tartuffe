@@ -593,7 +593,8 @@ func TestHTTPProxy_AddWaitBehavior(t *testing.T) {
 	}
 
 	response := responses[0].(map[string]interface{})
-	if behaviors, ok := response["_behaviors"].([]interface{}); ok && len(behaviors) > 0 {
+	// Check for behaviors array (mountebank uses "behaviors" key in recorded stubs)
+	if behaviors, ok := response["behaviors"].([]interface{}); ok && len(behaviors) > 0 {
 		behavior := behaviors[0].(map[string]interface{})
 		if wait, ok := behavior["wait"].(float64); ok {
 			// Should be at least 90ms (accounting for some variation)

@@ -3,6 +3,8 @@ package imposter
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -123,31 +125,47 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 
-	// Read data from connection (potentially multiple packets with resolver)
-	data, err := s.readRequest(conn)
-	if err != nil {
+	// Read data from connection - may be multiple packets
+	// Each packet should be recorded as a separate request
+	packets, err := s.readRequestPackets(conn)
+	if err != nil || len(packets) == 0 {
 		return
 	}
 
-	// Convert to string based on mode
-	var dataStr string
-	if s.imposter.Mode == "binary" {
-		dataStr = base64.StdEncoding.EncodeToString(data)
-	} else {
-		dataStr = string(data)
+	// Combine all packets for matching
+	var allData []byte
+	for _, pkt := range packets {
+		allData = append(allData, pkt...)
 	}
 
-	// Record request if configured
+	// Convert combined data to string based on mode
+	var dataStr string
+	if s.imposter.Mode == "binary" {
+		dataStr = base64.StdEncoding.EncodeToString(allData)
+	} else {
+		dataStr = string(allData)
+	}
+
+	// Record each packet as a separate request if configured
 	s.mu.Lock()
 	if s.imposter.RecordRequests {
-		tcpReq := models.TCPRequest{
-			RequestFrom: conn.RemoteAddr().String(),
-			Data:        dataStr,
-			Timestamp:   time.Now().Format(time.RFC3339),
+		remoteAddr := conn.RemoteAddr().String()
+		for _, pkt := range packets {
+			var pktStr string
+			if s.imposter.Mode == "binary" {
+				pktStr = base64.StdEncoding.EncodeToString(pkt)
+			} else {
+				pktStr = string(pkt)
+			}
+			tcpReq := models.TCPRequest{
+				RequestFrom: remoteAddr,
+				Data:        pktStr,
+				Timestamp:   time.Now().Format(time.RFC3339),
+			}
+			s.imposter.TCPRequests = append(s.imposter.TCPRequests, tcpReq)
 		}
-		s.imposter.TCPRequests = append(s.imposter.TCPRequests, tcpReq)
 	}
-	// Increment request counter
+	// Increment request counter (once per connection, not per packet)
 	if s.imposter.NumberOfRequests == nil {
 		count := 1
 		s.imposter.NumberOfRequests = &count
@@ -155,6 +173,9 @@ func (s *TCPServer) handleConnection(conn net.Conn) {
 		*s.imposter.NumberOfRequests++
 	}
 	s.mu.Unlock()
+
+	// Use allData for proxy requests
+	data := allData
 
 	// Find matching stub
 	match := s.matcher.Match(dataStr)
@@ -286,6 +307,24 @@ func (s *TCPServer) executeTCPDecorate(requestData, responseData, script string)
 func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, resp *models.Response) {
 	// Parse the target URL
 	targetURL := resp.Proxy.To
+
+	// Check for non-TCP protocols - return error if not tcp://
+	if !strings.HasPrefix(targetURL, "tcp://") && (strings.Contains(targetURL, "://")) {
+		// Non-TCP protocol specified
+		errorResp := map[string]interface{}{
+			"errors": []map[string]interface{}{
+				{
+					"code":    "invalid proxy",
+					"message": "Unable to proxy to any protocol other than tcp",
+					"source":  targetURL,
+				},
+			},
+		}
+		respBytes, _ := json.Marshal(errorResp)
+		clientConn.Write(respBytes)
+		return
+	}
+
 	// Remove tcp:// prefix if present
 	target := strings.TrimPrefix(targetURL, "tcp://")
 
@@ -293,7 +332,21 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 	originConn, err := net.DialTimeout("tcp", target, 5*time.Second)
 	if err != nil {
 		log.Printf("[ERROR] TCP proxy connection failed to %s: %v", target, err)
-		// Close client connection on proxy error
+		// Send mountebank-compatible error response
+		var errMsg string
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			errMsg = fmt.Sprintf("Cannot resolve %q", targetURL)
+		} else {
+			errMsg = fmt.Sprintf("Unable to connect to %q", targetURL)
+		}
+		errorResp := map[string]interface{}{
+			"errors": []map[string]interface{}{
+				{"code": "invalid proxy", "message": errMsg},
+			},
+		}
+		respBytes, _ := json.Marshal(errorResp)
+		clientConn.Write(respBytes)
 		return
 	}
 	defer originConn.Close()
@@ -301,22 +354,33 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 	// Forward request to origin
 	if _, err := originConn.Write(requestData); err != nil {
 		log.Printf("[ERROR] TCP proxy write to origin failed: %v", err)
-		mountebankStyleError := `{errors:[{code:'invalid proxy',message:'Cannot resolve "%s"'}]}`
-		clientConn.Write([]byte(fmt.Sprintf(mountebankStyleError, targetURL)))
+		errorResp := map[string]interface{}{
+			"errors": []map[string]interface{}{
+				{"code": "invalid proxy", "message": fmt.Sprintf("Cannot write to %q", targetURL)},
+			},
+		}
+		respBytes, _ := json.Marshal(errorResp)
+		clientConn.Write(respBytes)
 		return
 	}
 
-	// Read response from origin
-	originConn.SetReadDeadline(time.Now().Add(5 * time.Second))
-	response := make([]byte, 4096)
-	n, err := originConn.Read(response)
+	// Read response from origin - use endOfRequestResolver if available
+	var response []byte
+	resolver := s.imposter.EndOfRequestResolver
+	if resolver != nil && resolver.Inject != "" {
+		// Use resolver to determine when response is complete
+		response, err = s.readProxyResponse(originConn, resolver.Inject)
+	} else {
+		// No resolver - read until EOF or timeout
+		response, err = s.readFullResponse(originConn)
+	}
 	if err != nil && err != io.EOF {
 		log.Printf("[ERROR] TCP proxy read from origin failed: %v", err)
-		return
+		// Still try to send what we have
 	}
 
 	// Apply behaviors if present
-	responseData := string(response[:n])
+	responseData := response
 	if len(resp.Behaviors) > 0 {
 		// Create a request object for behaviors
 		reqData := string(requestData)
@@ -325,7 +389,7 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 		for _, behavior := range resp.Behaviors {
 			// Apply decorate behavior
 			if behavior.Decorate != "" {
-				responseData = s.executeTCPDecorate(reqData, responseData, behavior.Decorate)
+				responseData = []byte(s.executeTCPDecorate(reqData, string(responseData), behavior.Decorate))
 			}
 			// Other behaviors (wait, copy, etc.) can be added here
 		}
@@ -333,7 +397,66 @@ func (s *TCPServer) handleProxyRequest(clientConn net.Conn, requestData []byte, 
 
 	// Forward response to client
 	if len(responseData) > 0 {
-		clientConn.Write([]byte(responseData))
+		clientConn.Write(responseData)
+	}
+}
+
+// readFullResponse reads the complete response from origin without a resolver
+func (s *TCPServer) readFullResponse(conn net.Conn) ([]byte, error) {
+	var response []byte
+	buffer := make([]byte, 32768) // 32KB chunks
+
+	for {
+		conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		n, err := conn.Read(buffer)
+		if n > 0 {
+			response = append(response, buffer[:n]...)
+		}
+		if err != nil {
+			if err == io.EOF {
+				return response, nil
+			}
+			// Timeout or other error - return what we have
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return response, nil
+			}
+			return response, err
+		}
+	}
+}
+
+// readProxyResponse reads response from origin using the endOfRequestResolver
+func (s *TCPServer) readProxyResponse(conn net.Conn, resolverScript string) ([]byte, error) {
+	var response []byte
+	buffer := make([]byte, 32768) // 32KB chunks
+	isBinary := s.imposter.Mode == "binary"
+
+	for {
+		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+		n, err := conn.Read(buffer)
+		if n > 0 {
+			response = append(response, buffer[:n]...)
+
+			// Check if response is complete using the resolver
+			complete, resolverErr := s.jsEngine.ExecuteEndOfRequestResolver(resolverScript, response, isBinary)
+			if resolverErr != nil {
+				// Resolver error - return what we have
+				return response, nil
+			}
+			if complete {
+				return response, nil
+			}
+		}
+		if err != nil {
+			if err == io.EOF {
+				return response, nil
+			}
+			// Timeout or other error - return what we have
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				return response, nil
+			}
+			return response, err
+		}
 	}
 }
 
@@ -395,6 +518,62 @@ func (s *TCPServer) readRequest(conn net.Conn) ([]byte, error) {
 			return accumulated, err
 		}
 	}
+}
+
+// readRequestPackets reads request data as individual packets
+// This is used for recording each packet separately (mountebank compatibility)
+func (s *TCPServer) readRequestPackets(conn net.Conn) ([][]byte, error) {
+	// Check if we have an endOfRequestResolver
+	resolver := s.imposter.EndOfRequestResolver
+	if resolver != nil && resolver.Inject != "" {
+		// With resolver - read until resolver says complete
+		// Return all accumulated data as a single "packet" since the resolver
+		// determines the request boundary
+		data, err := s.readRequest(conn)
+		if err != nil {
+			return nil, err
+		}
+		if len(data) == 0 {
+			return nil, nil
+		}
+		return [][]byte{data}, nil
+	}
+
+	// No resolver - read each TCP packet separately
+	// Each read operation returns one packet's worth of data
+	var packets [][]byte
+	buffer := make([]byte, 65536) // 64KB buffer to handle large packets
+
+	// First read with longer timeout
+	conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+	n, err := conn.Read(buffer)
+	if err != nil {
+		if err == io.EOF && n > 0 {
+			return [][]byte{append([]byte(nil), buffer[:n]...)}, nil
+		}
+		if err != io.EOF {
+			return nil, err
+		}
+		return nil, nil
+	}
+	if n > 0 {
+		packets = append(packets, append([]byte(nil), buffer[:n]...))
+	}
+
+	// Continue reading with short timeout to catch additional packets
+	for {
+		conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+		n, err := conn.Read(buffer)
+		if n > 0 {
+			packets = append(packets, append([]byte(nil), buffer[:n]...))
+		}
+		if err != nil {
+			// EOF or timeout means no more data
+			break
+		}
+	}
+
+	return packets, nil
 }
 
 // GetImposter returns the imposter configuration
