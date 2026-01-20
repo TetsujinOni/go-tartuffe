@@ -233,15 +233,38 @@ func TestTCP_ProxyConnectionRefused(t *testing.T) {
 		t.Fatalf("failed to write to proxy: %v", err)
 	}
 
-	// Connection should be closed by proxy due to connection refused
+	// Should receive JSON error response for connection refused
 	buffer := make([]byte, 1024)
 	conn.SetReadDeadline(time.Now().Add(3 * time.Second))
 	n, err := conn.Read(buffer)
 
-	// We expect either EOF (connection closed) or a timeout
-	// Mountebank closes the connection when proxy target is unreachable
-	if n > 0 {
-		t.Errorf("expected connection to close, got %d bytes: %s", n, string(buffer[:n]))
+	if err != nil {
+		t.Fatalf("expected error response, got read error: %v", err)
+	}
+	if n == 0 {
+		t.Fatal("expected error response, got empty response")
+	}
+
+	// Parse and validate the error response
+	response := string(buffer[:n])
+	var errorResp struct {
+		Errors []struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(buffer[:n], &errorResp); err != nil {
+		t.Fatalf("failed to parse error response: %v, response was: %s", err, response)
+	}
+
+	if len(errorResp.Errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errorResp.Errors))
+	}
+	if errorResp.Errors[0].Code != "invalid proxy" {
+		t.Errorf("expected error code 'invalid proxy', got %q", errorResp.Errors[0].Code)
+	}
+	if !strings.Contains(errorResp.Errors[0].Message, "Unable to connect") {
+		t.Errorf("expected message to contain 'Unable to connect', got %q", errorResp.Errors[0].Message)
 	}
 }
 
