@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync/atomic"
 )
 
@@ -117,6 +118,13 @@ func (r *Response) UnmarshalJSON(data []byte) error {
 				}
 			}
 			raw["behaviors"] = v
+		case nil:
+			// Null is valid - behaviors will be empty
+			delete(raw, "_behaviors")
+			delete(raw, "behaviors")
+		default:
+			// Invalid type (string, number, boolean) - reject
+			return fmt.Errorf("'_behaviors' must be an object or array")
 		}
 
 		// Remove "_behaviors" field if it exists (we've normalized to "behaviors")
