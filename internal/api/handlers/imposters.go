@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/imposter"
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
@@ -148,20 +147,6 @@ func (h *ImpostersHandler) CreateImposter(w http.ResponseWriter, r *http.Request
 			}
 		}
 
-		// Validate proxy responses use TCP protocol
-		for _, stub := range imp.Stubs {
-			for _, resp := range stub.Responses {
-				if resp.Proxy != nil && resp.Proxy.To != "" {
-					// Validate that proxy.to uses tcp:// protocol
-					proxyURL := resp.Proxy.To
-					if !strings.HasPrefix(proxyURL, "tcp://") {
-						response.WriteError(w, http.StatusBadRequest, response.ErrCodeBadData,
-							"cannot proxy to "+proxyURL+" using tcp protocol")
-						return
-					}
-				}
-			}
-		}
 	}
 
 	// For HTTPS imposters, extract certificate metadata

@@ -5,8 +5,10 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -16,6 +18,21 @@ import (
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 )
+
+// ProxyError represents an error from proxy operations with specific error codes
+type ProxyError struct {
+	Code    string // Error code (e.g., "invalid proxy")
+	Message string // Human-readable message
+	Err     error  // Underlying error
+}
+
+func (e *ProxyError) Error() string {
+	return e.Message
+}
+
+func (e *ProxyError) Unwrap() error {
+	return e.Err
+}
 
 // ProxyHandler handles proxy responses
 type ProxyHandler struct {
@@ -32,6 +49,11 @@ func NewProxyHandler() *ProxyHandler {
 				// Disable automatic decompression so we can preserve Content-Encoding headers
 				// and binary data as-is from the origin server
 				DisableCompression: true,
+				// Allow proxying to HTTPS servers with self-signed certificates
+				// This is needed for cross-protocol proxying (HTTP→HTTPS)
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
 			},
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Don't follow redirects - return them to the client
@@ -50,8 +72,10 @@ func (h *ProxyHandler) getClient(proxy *models.ProxyResponse) *http.Client {
 		return h.client
 	}
 
-	// Create custom TLS config
-	tlsConfig := &tls.Config{}
+	// Create custom TLS config - start with InsecureSkipVerify for self-signed certs
+	tlsConfig := &tls.Config{
+		InsecureSkipVerify: true,
+	}
 
 	// Load client certificate if provided
 	if proxy.Cert != "" && proxy.Key != "" {
@@ -170,6 +194,27 @@ func (h *ProxyHandler) Execute(req *models.Request, proxy *models.ProxyResponse,
 	startTime := time.Now()
 	resp, err := client.Do(proxyReq)
 	if err != nil {
+		// Check for DNS resolution errors
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) {
+			return nil, &ProxyError{
+				Code:    "invalid proxy",
+				Message: fmt.Sprintf("Cannot resolve %q", proxy.To),
+				Err:     err,
+			}
+		}
+		// Check for connection refused errors (non-listening port)
+		var opErr *net.OpError
+		if errors.As(err, &opErr) {
+			if opErr.Op == "dial" {
+				// Could be connection refused or other dial errors
+				return nil, &ProxyError{
+					Code:    "invalid proxy",
+					Message: fmt.Sprintf("Cannot connect to %q", proxy.To),
+					Err:     err,
+				}
+			}
+		}
 		return nil, fmt.Errorf("proxy request failed: %w", err)
 	}
 	defer resp.Body.Close()
@@ -295,9 +340,12 @@ func (h *ProxyHandler) generateStub(req *models.Request, resp *models.IsResponse
 
 	// Add wait behavior if configured
 	if proxy.AddWaitBehavior {
+		elapsedMs := int(elapsed.Milliseconds())
 		stub.Responses[0].Behaviors = append(stub.Responses[0].Behaviors, models.Behavior{
-			Wait: int(elapsed.Milliseconds()),
+			Wait: elapsedMs,
 		})
+		// Also set _proxyResponseTime on the is response for verification
+		resp.ProxyResponseTime = elapsedMs
 	}
 
 	// Add decorate behavior if configured
