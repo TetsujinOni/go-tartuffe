@@ -1283,6 +1283,16 @@ func (m *Matcher) matchesPattern(actual, pattern interface{}, opts predicateOpti
 
 	// Handle case where pattern is a map (JSON body matching with regex)
 	if patternMap, ok := pattern.(map[string]interface{}); ok {
+		switch a := actual.(type) {
+		case map[string]interface{}:
+			return m.jsonMatchesPattern(a, patternMap, opts)
+		case map[string]string:
+			converted := make(map[string]interface{}, len(a))
+			for k, v := range a {
+				converted[k] = v
+			}
+			return m.jsonMatchesPattern(converted, patternMap, opts)
+		}
 		// actual should be a JSON string, parse it
 		if actualIsStr {
 			var actualParsed interface{}
