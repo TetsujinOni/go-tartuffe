@@ -3,11 +3,12 @@
 ## Project Overview
 
 **Project**: go-tartuffe - Go implementation of mountebank service virtualization
-**Branch**: feat/missing-backlog
+**Branch**: patch/fix-stub-pattern-matching
 **Compatibility Target**: 75%+ with mountebank API test suite
-**Current Status**: **92.5% (233/252 tests) | 100% adjusted (all actionable items complete)**
+**Current Status**: **92.1% (232/252 tests) | 100% adjusted (all actionable items complete)**
 
 **Recent Achievements**:
+- Predicate Map Matching: Fixed contains/startsWith/endsWith predicates on headers/query with map patterns
 - HTTP Proxy CONNECT: Loopback tunnel support for HTTPS proxy scenarios
 - TCP Packet Splitting: Each TCP packet recorded as separate request
 - TCP Proxy: Non-TCP protocol rejection with proper error format
@@ -120,15 +121,12 @@ The mountebank test suite validates compatibility with the original mountebank b
 
 Mountebank has several test categories:
 
-- **test:api** - API-level integration tests (219/252 passing - 86.9%)
-  - Major remaining gaps:
-    - HTTP Proxy (5 tests): CONNECT, cross-protocol, behavior persistence
-    - TCP Proxy/Features (6 tests): endOfRequestResolver in proxy, error handling
-    - Behavior Composition (4 tests): shellTransform fallback, repeat behavior
-  - Won't fix (13 tests):
+- **test:api** - API-level integration tests (232/252 passing - 92.1%)
+  - Won't fix (20 tests):
     - Security: shellTransform (4), process object (2)
-    - Architectural: replayable export, old proxy syntax, TCP behaviors
+    - Architectural: replayable export (2), old proxy syntax, HTTPS key/cert creation, proxy behavior persistence
     - goja limitation: async injection (4)
+    - TCP behaviors with composition (4)
 - **test:js** - JavaScript client tests (passing)
 - **test:cli** - CLI tests (won't fix - different CLI implementation)
 - **test:web** - Web UI tests (won't fix - different UI)
@@ -146,12 +144,12 @@ go build -o bin/tartuffe ./cmd/tartuffe
 
 # 3. Run Go integration tests (should all pass)
 go test ./test/integration/... -v
-# Expected: 228/228 tests passing in ~50 seconds
+# Expected: 238+ tests passing in ~55 seconds
 
 # 4. Run mountebank API tests against go-tartuffe
 cd /home/tetsujinoni/work/mountebank
 MB_EXECUTABLE=/home/tetsujinoni/work/go-tartuffe/bin/tartuffe-wrapper.sh npm run test:api
-# Current: 219 passing, 33 failing (252 total) = 86.9%
+# Current: 232 passing, 20 failing (252 total) = 92.1%
 
 # 5. Clean up
 pkill -f tartuffe || true
