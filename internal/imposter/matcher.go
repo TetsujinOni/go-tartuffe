@@ -1185,26 +1185,19 @@ func (m *Matcher) jsonEndsWith(actual, expected interface{}, opts predicateOptio
 
 // containsValue checks if actual contains expected
 func (m *Matcher) containsValue(actual, expected interface{}, opts predicateOptions) bool {
-	actualStr, actualIsStr := toString(actual)
-
 	// Handle case where expected is a map (JSON body matching)
 	if expectedMap, ok := expected.(map[string]interface{}); ok {
-		// actual should be a JSON string, parse it
-		if actualIsStr {
-			var actualParsed interface{}
-			if err := json.Unmarshal([]byte(actualStr), &actualParsed); err == nil {
-				return m.jsonContainsString(actualParsed, expectedMap, opts)
-			}
+		if actualMap := toMapInterface(actual); actualMap != nil {
+			return m.jsonContainsString(actualMap, expectedMap, opts)
 		}
 		return false
 	}
 
+	actualStr, actualIsStr := toString(actual)
 	expectedStr, expectedIsStr := toString(expected)
 
 	if actualIsStr && expectedIsStr {
-		// Apply except pattern to strip matching portions
 		actualStr = m.applyExcept(actualStr, opts.except, opts.caseSensitive)
-
 		if opts.caseSensitive {
 			return strings.Contains(actualStr, expectedStr)
 		}
@@ -1216,26 +1209,19 @@ func (m *Matcher) containsValue(actual, expected interface{}, opts predicateOpti
 
 // startsWithValue checks if actual starts with expected
 func (m *Matcher) startsWithValue(actual, expected interface{}, opts predicateOptions) bool {
-	actualStr, actualIsStr := toString(actual)
-
 	// Handle case where expected is a map (JSON body matching)
 	if expectedMap, ok := expected.(map[string]interface{}); ok {
-		// actual should be a JSON string, parse it
-		if actualIsStr {
-			var actualParsed interface{}
-			if err := json.Unmarshal([]byte(actualStr), &actualParsed); err == nil {
-				return m.jsonStartsWith(actualParsed, expectedMap, opts)
-			}
+		if actualMap := toMapInterface(actual); actualMap != nil {
+			return m.jsonStartsWith(actualMap, expectedMap, opts)
 		}
 		return false
 	}
 
+	actualStr, actualIsStr := toString(actual)
 	expectedStr, expectedIsStr := toString(expected)
 
 	if actualIsStr && expectedIsStr {
-		// Apply except pattern to strip matching portions
 		actualStr = m.applyExcept(actualStr, opts.except, opts.caseSensitive)
-
 		if opts.caseSensitive {
 			return strings.HasPrefix(actualStr, expectedStr)
 		}
@@ -1247,26 +1233,19 @@ func (m *Matcher) startsWithValue(actual, expected interface{}, opts predicateOp
 
 // endsWithValue checks if actual ends with expected
 func (m *Matcher) endsWithValue(actual, expected interface{}, opts predicateOptions) bool {
-	actualStr, actualIsStr := toString(actual)
-
 	// Handle case where expected is a map (JSON body matching)
 	if expectedMap, ok := expected.(map[string]interface{}); ok {
-		// actual should be a JSON string, parse it
-		if actualIsStr {
-			var actualParsed interface{}
-			if err := json.Unmarshal([]byte(actualStr), &actualParsed); err == nil {
-				return m.jsonEndsWith(actualParsed, expectedMap, opts)
-			}
+		if actualMap := toMapInterface(actual); actualMap != nil {
+			return m.jsonEndsWith(actualMap, expectedMap, opts)
 		}
 		return false
 	}
 
+	actualStr, actualIsStr := toString(actual)
 	expectedStr, expectedIsStr := toString(expected)
 
 	if actualIsStr && expectedIsStr {
-		// Apply except pattern to strip matching portions
 		actualStr = m.applyExcept(actualStr, opts.except, opts.caseSensitive)
-
 		if opts.caseSensitive {
 			return strings.HasSuffix(actualStr, expectedStr)
 		}
@@ -1278,30 +1257,16 @@ func (m *Matcher) endsWithValue(actual, expected interface{}, opts predicateOpti
 
 // matchesPattern checks if actual matches the regex pattern
 func (m *Matcher) matchesPattern(actual, pattern interface{}, opts predicateOptions) bool {
-	actualStr, actualIsStr := toString(actual)
-	patternStr, patternIsStr := toString(pattern)
-
 	// Handle case where pattern is a map (JSON body matching with regex)
 	if patternMap, ok := pattern.(map[string]interface{}); ok {
-		switch a := actual.(type) {
-		case map[string]interface{}:
-			return m.jsonMatchesPattern(a, patternMap, opts)
-		case map[string]string:
-			converted := make(map[string]interface{}, len(a))
-			for k, v := range a {
-				converted[k] = v
-			}
-			return m.jsonMatchesPattern(converted, patternMap, opts)
-		}
-		// actual should be a JSON string, parse it
-		if actualIsStr {
-			var actualParsed interface{}
-			if err := json.Unmarshal([]byte(actualStr), &actualParsed); err == nil {
-				return m.jsonMatchesPattern(actualParsed, patternMap, opts)
-			}
+		if actualMap := toMapInterface(actual); actualMap != nil {
+			return m.jsonMatchesPattern(actualMap, patternMap, opts)
 		}
 		return false
 	}
+
+	actualStr, actualIsStr := toString(actual)
+	patternStr, patternIsStr := toString(pattern)
 
 	if !actualIsStr || !patternIsStr {
 		return false
@@ -1394,4 +1359,31 @@ func toString(v interface{}) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// toMapInterface converts actual values to map[string]interface{} for JSON-style matching.
+// Handles: map[string]interface{} (direct), map[string]string (converted), or JSON string (parsed).
+// Returns nil if conversion is not possible.
+func toMapInterface(actual interface{}) map[string]interface{} {
+	switch a := actual.(type) {
+	case map[string]interface{}:
+		return a
+	case map[string]string:
+		converted := make(map[string]interface{}, len(a))
+		for k, v := range a {
+			converted[k] = v
+		}
+		return converted
+	case string:
+		var parsed map[string]interface{}
+		if err := json.Unmarshal([]byte(a), &parsed); err == nil {
+			return parsed
+		}
+	case []byte:
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(a, &parsed); err == nil {
+			return parsed
+		}
+	}
+	return nil
 }
