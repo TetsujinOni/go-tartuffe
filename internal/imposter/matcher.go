@@ -6,6 +6,7 @@ import (
 	"log"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
@@ -656,30 +657,20 @@ func (m *Matcher) evaluateExists(value interface{}, req *models.Request, opts pr
 		if nestedMap, ok := shouldExist.(map[string]interface{}); ok {
 			// Special handling for body JSON key existence checks
 			if strings.ToLower(field) == "body" {
-				// Parse body as JSON and check if keys exist
+				// Parse body as JSON and check if keys exist (supports deep nesting)
 				bodyStr := fmt.Sprintf("%v", req.Body)
-				var bodyParsed map[string]interface{}
+				var bodyParsed interface{}
 				if err := json.Unmarshal([]byte(bodyStr), &bodyParsed); err == nil {
-					for jsonKey, jsonShouldExist := range nestedMap {
-						expected, _ := jsonShouldExist.(bool)
-						_, exists := bodyParsed[jsonKey]
-
-						// Try case-insensitive if needed
-						if !exists && !opts.keyCaseSensitive {
-							for k := range bodyParsed {
-								if strings.EqualFold(k, jsonKey) {
-									exists = true
-									break
-								}
-							}
-						}
-
-						if exists != expected {
-							return false
-						}
+					if !m.checkNestedExistence(bodyParsed, nestedMap, opts.keyCaseSensitive) {
+						return false
 					}
 					continue
 				}
+				// JSON parse failed - if any key expects true, fail
+				if !m.allNestedExpectFalse(nestedMap) {
+					return false
+				}
+				continue
 			}
 
 			// Regular nested field handling (headers, query, etc.)
@@ -692,6 +683,27 @@ func (m *Matcher) evaluateExists(value interface{}, req *models.Request, opts pr
 				}
 			}
 		} else {
+			// Check for dot notation in field name: "body.user.address.city"
+			if strings.HasPrefix(strings.ToLower(field), "body.") {
+				bodyPath := field[5:] // Remove "body." prefix
+				bodyStr := fmt.Sprintf("%v", req.Body)
+				var bodyParsed interface{}
+				if err := json.Unmarshal([]byte(bodyStr), &bodyParsed); err == nil {
+					exists := m.jsonBodyPathExists(bodyParsed, bodyPath, opts.keyCaseSensitive)
+					expected, _ := shouldExist.(bool)
+					if exists != expected {
+						return false
+					}
+					continue
+				}
+				// JSON parse failed, treat as non-existent
+				expected, _ := shouldExist.(bool)
+				if expected {
+					return false // Expected to exist but couldn't parse JSON
+				}
+				continue
+			}
+
 			// Direct field check like {"path": true}
 			exists := m.fieldExists(req, field, opts.keyCaseSensitive)
 			expected, _ := shouldExist.(bool)
@@ -837,6 +849,214 @@ func (m *Matcher) fieldExists(req *models.Request, field string, keyCaseSensitiv
 	default:
 		return false
 	}
+}
+
+// splitJSONPath splits a path like "user.items[0].name" into ["user", "items", "[0]", "name"]
+func splitJSONPath(path string) []string {
+	var parts []string
+	var current strings.Builder
+
+	for i := 0; i < len(path); i++ {
+		ch := path[i]
+		switch ch {
+		case '.':
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+		case '[':
+			if current.Len() > 0 {
+				parts = append(parts, current.String())
+				current.Reset()
+			}
+			// Find closing bracket
+			j := i + 1
+			for j < len(path) && path[j] != ']' {
+				j++
+			}
+			if j < len(path) {
+				parts = append(parts, path[i:j+1]) // includes brackets
+				i = j
+			}
+		default:
+			current.WriteByte(ch)
+		}
+	}
+
+	if current.Len() > 0 {
+		parts = append(parts, current.String())
+	}
+
+	return parts
+}
+
+// navigateAndCheck traverses the JSON structure and checks if the path exists
+func navigateAndCheck(data interface{}, parts []string, keyCaseSensitive bool) bool {
+	if len(parts) == 0 {
+		return true // Reached the end, path exists
+	}
+
+	part := parts[0]
+	remaining := parts[1:]
+
+	// Handle array index notation: [0], [*], [-1]
+	if strings.HasPrefix(part, "[") && strings.HasSuffix(part, "]") {
+		arr, ok := data.([]interface{})
+		if !ok {
+			return false
+		}
+
+		indexStr := strings.Trim(part, "[]")
+
+		// Wildcard: check if ANY element has the remaining path
+		if indexStr == "*" {
+			for _, item := range arr {
+				if navigateAndCheck(item, remaining, keyCaseSensitive) {
+					return true
+				}
+			}
+			return false
+		}
+
+		// Numeric index
+		index, err := strconv.Atoi(indexStr)
+		if err != nil {
+			return false
+		}
+
+		// Handle negative index
+		if index < 0 {
+			index = len(arr) + index
+		}
+
+		if index < 0 || index >= len(arr) {
+			return false
+		}
+
+		return navigateAndCheck(arr[index], remaining, keyCaseSensitive)
+	}
+
+	// Handle object key
+	obj, ok := data.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	// Try exact match first
+	if val, exists := obj[part]; exists {
+		return navigateAndCheck(val, remaining, keyCaseSensitive)
+	}
+
+	// Try case-insensitive match if enabled
+	if !keyCaseSensitive {
+		for k, v := range obj {
+			if strings.EqualFold(k, part) {
+				return navigateAndCheck(v, remaining, keyCaseSensitive)
+			}
+		}
+	}
+
+	return false
+}
+
+// jsonBodyPathExists checks if a path exists within a parsed JSON body
+// path format: "user.address.city" or "items[0].name" or "items[*].id"
+func (m *Matcher) jsonBodyPathExists(data interface{}, path string, keyCaseSensitive bool) bool {
+	if path == "" {
+		return data != nil
+	}
+
+	parts := splitJSONPath(path)
+	return navigateAndCheck(data, parts, keyCaseSensitive)
+}
+
+// keyExistsInJSON checks if a key exists in JSON data
+func (m *Matcher) keyExistsInJSON(data interface{}, key string, keyCaseSensitive bool) bool {
+	obj, ok := data.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	if _, exists := obj[key]; exists {
+		return true
+	}
+
+	if !keyCaseSensitive {
+		for k := range obj {
+			if strings.EqualFold(k, key) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// getJSONValue retrieves a value from JSON data by key
+func (m *Matcher) getJSONValue(data interface{}, key string, keyCaseSensitive bool) interface{} {
+	obj, ok := data.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+
+	if val, exists := obj[key]; exists {
+		return val
+	}
+
+	if !keyCaseSensitive {
+		for k, v := range obj {
+			if strings.EqualFold(k, key) {
+				return v
+			}
+		}
+	}
+
+	return nil
+}
+
+// allNestedExpectFalse checks if all nested bool values are false
+func (m *Matcher) allNestedExpectFalse(spec map[string]interface{}) bool {
+	for _, value := range spec {
+		switch v := value.(type) {
+		case bool:
+			if v {
+				return false // Expected true but key doesn't exist
+			}
+		case map[string]interface{}:
+			if !m.allNestedExpectFalse(v) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// checkNestedExistence recursively checks JSON existence from nested map specification
+func (m *Matcher) checkNestedExistence(data interface{}, spec map[string]interface{}, keyCaseSensitive bool) bool {
+	for key, value := range spec {
+		switch v := value.(type) {
+		case bool:
+			// Leaf node: check if key exists
+			exists := m.keyExistsInJSON(data, key, keyCaseSensitive)
+			if exists != v {
+				return false
+			}
+		case map[string]interface{}:
+			// Nested object: navigate deeper
+			childData := m.getJSONValue(data, key, keyCaseSensitive)
+			if childData == nil {
+				// Key doesn't exist, check if any nested keys expect false
+				if !m.allNestedExpectFalse(v) {
+					return false
+				}
+			} else {
+				if !m.checkNestedExistence(childData, v, keyCaseSensitive) {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // compareValues compares two values for equality

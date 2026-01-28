@@ -1897,3 +1897,416 @@ func TestJSONExists_EmptyArray(t *testing.T) {
 		t.Errorf("expected 'matched' for empty array (key exists), got '%s'", string(body))
 	}
 }
+
+// TestJSONExists_NestedDotNotation tests exists with dot notation for nested JSON
+func TestJSONExists_NestedDotNotation(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6150,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.user.address.city": true,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - nested path exists
+	impResp, err := http.Post("http://localhost:6150/", "application/json",
+		strings.NewReader(`{"user": {"address": {"city": "NYC"}}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for nested path exists, got '%s'", string(body))
+	}
+
+	// Should NOT match - intermediate path missing
+	impResp2, err := http.Post("http://localhost:6150/", "application/json",
+		strings.NewReader(`{"user": {}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) == "matched" {
+		t.Errorf("should NOT match when intermediate path is missing")
+	}
+}
+
+// TestJSONExists_ArrayIndex tests exists with array index notation
+func TestJSONExists_ArrayIndex(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6151,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.items[0].name": true,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - array element has name
+	impResp, err := http.Post("http://localhost:6151/", "application/json",
+		strings.NewReader(`{"items": [{"name": "item1"}]}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for array index path exists, got '%s'", string(body))
+	}
+
+	// Should NOT match - empty array
+	impResp2, err := http.Post("http://localhost:6151/", "application/json",
+		strings.NewReader(`{"items": []}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) == "matched" {
+		t.Errorf("should NOT match when array is empty")
+	}
+}
+
+// TestJSONExists_ArrayWildcard tests exists with array wildcard
+func TestJSONExists_ArrayWildcard(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6152,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.items[*].id": true,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - at least one element has id
+	impResp, err := http.Post("http://localhost:6152/", "application/json",
+		strings.NewReader(`{"items": [{"id": 1}, {"id": 2}]}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for wildcard path exists, got '%s'", string(body))
+	}
+
+	// Should NOT match - no element has id
+	impResp2, err := http.Post("http://localhost:6152/", "application/json",
+		strings.NewReader(`{"items": [{"name": "no-id"}]}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) == "matched" {
+		t.Errorf("should NOT match when no element has the property")
+	}
+}
+
+// TestJSONExists_NestedMapDeep tests deeply nested map specification
+func TestJSONExists_NestedMapDeep(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6153,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body": map[string]interface{}{
+								"user": map[string]interface{}{
+									"address": map[string]interface{}{
+										"city": true,
+									},
+								},
+							},
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - deeply nested path exists
+	impResp, err := http.Post("http://localhost:6153/", "application/json",
+		strings.NewReader(`{"user": {"address": {"city": "NYC"}}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for deeply nested map, got '%s'", string(body))
+	}
+
+	// Should NOT match - intermediate missing
+	impResp2, err := http.Post("http://localhost:6153/", "application/json",
+		strings.NewReader(`{"user": {"name": "John"}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) == "matched" {
+		t.Errorf("should NOT match when nested path doesn't exist")
+	}
+}
+
+// TestJSONExists_NullValue tests that null values count as existing
+func TestJSONExists_NullValue(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6154,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.value": true,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Key with null value counts as existing
+	impResp, err := http.Post("http://localhost:6154/", "application/json",
+		strings.NewReader(`{"value": null}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for null value (key exists), got '%s'", string(body))
+	}
+}
+
+// TestJSONExists_MissingIntermediatePath tests exists: false with missing intermediate paths
+func TestJSONExists_MissingIntermediatePath(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6155,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.a.b.c": false,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - path doesn't exist
+	impResp, err := http.Post("http://localhost:6155/", "application/json",
+		strings.NewReader(`{"a": {}}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for exists:false with missing path, got '%s'", string(body))
+	}
+
+	// Should match - root object is empty
+	impResp2, err := http.Post("http://localhost:6155/", "application/json",
+		strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) != "matched" {
+		t.Errorf("expected 'matched' for exists:false with empty object, got '%s'", string(body2))
+	}
+}
+
+// TestJSONExists_NegativeArrayIndex tests negative array index
+func TestJSONExists_NegativeArrayIndex(t *testing.T) {
+	defer cleanup(t)
+
+	imposter := map[string]interface{}{
+		"protocol": "http",
+		"port":     6156,
+		"stubs": []map[string]interface{}{
+			{
+				"predicates": []map[string]interface{}{
+					{
+						"exists": map[string]interface{}{
+							"body.items[-1].name": true,
+						},
+					},
+				},
+				"responses": []map[string]interface{}{
+					{"is": map[string]interface{}{"body": "matched"}},
+				},
+			},
+		},
+	}
+
+	resp, _, err := post("/imposters", imposter)
+	if err != nil {
+		t.Fatalf("failed to create imposter: %v", err)
+	}
+	if resp.StatusCode != 201 {
+		t.Fatalf("expected 201, got %d", resp.StatusCode)
+	}
+
+	time.Sleep(100 * time.Millisecond)
+
+	// Should match - last element has name
+	impResp, err := http.Post("http://localhost:6156/", "application/json",
+		strings.NewReader(`{"items": [{"id": 1}, {"name": "last"}]}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body, _ := io.ReadAll(impResp.Body)
+	impResp.Body.Close()
+
+	if string(body) != "matched" {
+		t.Errorf("expected 'matched' for negative index path exists, got '%s'", string(body))
+	}
+
+	// Should NOT match - last element doesn't have name
+	impResp2, err := http.Post("http://localhost:6156/", "application/json",
+		strings.NewReader(`{"items": [{"name": "first"}, {"id": 2}]}`))
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	body2, _ := io.ReadAll(impResp2.Body)
+	impResp2.Body.Close()
+
+	if string(body2) == "matched" {
+		t.Errorf("should NOT match when last element doesn't have the property")
+	}
+}
