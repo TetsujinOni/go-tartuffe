@@ -127,7 +127,9 @@ func (e *BehaviorExecutor) executeWait(req *models.Request, wait interface{}) er
 
 // executeWaitFunction executes a JavaScript function to get wait time
 func (e *BehaviorExecutor) executeWaitFunction(req *models.Request, script string) (int, error) {
-	vm := goja.New()
+	vm := e.jsEngine.vmPool.Acquire()
+	defer e.jsEngine.vmPool.Release(vm)
+
 	jsLogger := NewJSLogger("behavior:wait")
 
 	// Create request object
@@ -144,7 +146,14 @@ func (e *BehaviorExecutor) executeWaitFunction(req *models.Request, script strin
 
 	// Wrap and execute the function with request parameter
 	wrappedScript := fmt.Sprintf(`(%s)(request)`, script)
-	result, err := vm.RunString(wrappedScript)
+
+	// Get compiled program from cache
+	program, err := e.jsEngine.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		return 0, formatJSError(err, script, "wait behavior")
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		return 0, formatJSError(err, script, "wait behavior")
 	}
@@ -748,7 +757,9 @@ func (e *BehaviorExecutor) replaceRowTokens(resp *models.IsResponse, token strin
 
 // executeDecorate runs JavaScript to post-process the response
 func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsResponse, script string) (*models.IsResponse, error) {
-	vm := goja.New()
+	vm := e.jsEngine.vmPool.Acquire()
+	defer e.jsEngine.vmPool.Release(vm)
+
 	jsLogger := NewJSLogger("behavior:decorate")
 
 	// Ensure headers is not nil
@@ -809,7 +820,13 @@ func (e *BehaviorExecutor) executeDecorate(req *models.Request, resp *models.IsR
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.jsEngine.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		return nil, formatJSError(err, script, formatRequestInfo(req))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
