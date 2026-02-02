@@ -9,9 +9,6 @@ import (
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/dop251/goja"
-	"github.com/dop251/goja_nodejs/buffer"
-	"github.com/dop251/goja_nodejs/console"
-	"github.com/dop251/goja_nodejs/require"
 )
 
 // scriptPreviewLength is the max length of script shown in error messages
@@ -129,16 +126,18 @@ func createSortedQueryObject(vm *goja.Runtime, query map[string]string) goja.Val
 	return result
 }
 
-// JSEngine handles JavaScript injection execution
+// JSEngine handles JavaScript injection execution.
+// It uses a VM pool and script cache for better performance.
 type JSEngine struct {
-	registry *require.Registry // Node.js module registry for Goja Runtimes
+	vmPool      *VMPool      // Pool of Goja VMs
+	scriptCache *ScriptCache // Cache of compiled scripts
 }
 
-// NewJSEngine creates a new JavaScript engine
+// NewJSEngine creates a new JavaScript engine with VM pool and script cache.
 func NewJSEngine() *JSEngine {
-	reg := require.NewRegistry()
 	return &JSEngine{
-		registry: reg,
+		vmPool:      NewVMPool(),
+		scriptCache: NewScriptCache(),
 	}
 }
 
@@ -153,10 +152,9 @@ func NewJSEngine() *JSEngine {
 // This allows old interface code like `request => request.method` to work because
 // the first parameter is actually config which has method directly on it.
 func (e *JSEngine) ExecuteResponse(script string, req *models.Request, imposterState map[string]interface{}) (*models.IsResponse, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
-	console.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
+
 	jsLogger := NewJSLogger("inject:response")
 
 	// Create sorted query object for deterministic JSON.stringify() output
@@ -221,7 +219,13 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request, imposterS
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		return nil, formatJSError(err, script, formatRequestInfo(req))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -241,9 +245,8 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request, imposterS
 // This allows old interface code like `request => request.path` to work because
 // the first parameter is actually config which has path directly on it.
 func (e *JSEngine) ExecutePredicate(script string, req *models.Request, imposterState map[string]interface{}) (bool, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
 
 	jsLogger := NewJSLogger("inject:predicate")
 
@@ -304,7 +307,13 @@ func (e *JSEngine) ExecutePredicate(script string, req *models.Request, imposter
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		return false, formatJSError(err, script, formatRequestInfo(req))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		return false, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -391,10 +400,9 @@ func (e *JSEngine) convertToResponse(val goja.Value) (*models.IsResponse, error)
 // Returns an array of predicates generated from the request
 // The script should be a function that takes a config object and returns an array of predicates
 func (e *JSEngine) ExecutePredicateGenerator(script string, req *models.Request) (interface{}, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
-	console.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
+
 	jsLogger := NewJSLogger("inject:predicateGenerator")
 
 	// Create sorted query object for deterministic JSON.stringify() output
@@ -430,7 +438,13 @@ func (e *JSEngine) ExecutePredicateGenerator(script string, req *models.Request)
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		return nil, formatJSError(err, script, formatRequestInfo(req))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -444,9 +458,8 @@ func (e *JSEngine) ExecutePredicateGenerator(script string, req *models.Request)
 // For binary mode, rawData is passed as a Buffer to JavaScript
 // For text mode, rawData is passed as a string
 func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, isBinary bool) (bool, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
 
 	jsLogger := NewJSLogger("inject:endOfRequestResolver")
 	vm.Set("logger", jsLogger.createLoggerObject())
@@ -467,7 +480,14 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, is
 			})()
 		`, script)
 
-		result, err := vm.RunString(wrappedScript)
+		// Get compiled program from cache
+		program, err := e.scriptCache.GetOrCompile(wrappedScript)
+		if err != nil {
+			dataPreview := fmt.Sprintf("[binary data, %d bytes]", len(rawData))
+			return false, formatJSError(err, script, dataPreview)
+		}
+
+		result, err := vm.RunProgram(program)
 		if err != nil {
 			dataPreview := fmt.Sprintf("[binary data, %d bytes]", len(rawData))
 			return false, formatJSError(err, script, dataPreview)
@@ -487,7 +507,17 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, is
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return false, formatJSError(err, script, fmt.Sprintf("requestData: %q", dataPreview))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		dataPreview := requestData
 		if len(dataPreview) > 50 {
@@ -504,9 +534,8 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, is
 // For backwards compatibility, the config object has all request fields flattened onto it
 // (config.data, etc.) in addition to config.request.data, etc.
 func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
 
 	jsLogger := NewJSLogger("inject:tcp-predicate")
 
@@ -542,7 +571,17 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return false, formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		// Include preview of request data for debugging
 		dataPreview := requestData
@@ -560,10 +599,9 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 // For backwards compatibility, the config object has all request fields flattened onto it
 // (config.data, etc.) in addition to config.request.data, etc.
 func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state map[string]interface{}) (string, error) {
-	vm := goja.New()
-	new(require.Registry).Enable(vm)
-	buffer.Enable(vm)
-	console.Enable(vm)
+	vm := e.vmPool.Acquire()
+	defer e.vmPool.Release(vm)
+
 	jsLogger := NewJSLogger("inject:tcp-response")
 
 	// Ensure state is not nil
@@ -603,7 +641,17 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := e.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		dataPreview := requestData
+		if len(dataPreview) > 50 {
+			dataPreview = dataPreview[:50] + "..."
+		}
+		return "", formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		// Include preview of request data for debugging
 		dataPreview := requestData

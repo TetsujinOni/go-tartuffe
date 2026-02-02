@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
-	"github.com/dop251/goja"
 )
 
 // TCPServer represents a TCP imposter server
@@ -262,7 +261,8 @@ func (s *TCPServer) applyTCPBehaviors(requestData, responseData string, behavior
 
 // executeTCPDecorate executes a decorate behavior for TCP
 func (s *TCPServer) executeTCPDecorate(requestData, responseData, script string) string {
-	vm := goja.New()
+	vm := s.jsEngine.vmPool.Acquire()
+	defer s.jsEngine.vmPool.Release(vm)
 
 	// Create request object
 	reqObj := map[string]interface{}{
@@ -286,7 +286,14 @@ func (s *TCPServer) executeTCPDecorate(requestData, responseData, script string)
 		})()
 	`, script)
 
-	result, err := vm.RunString(wrappedScript)
+	// Get compiled program from cache
+	program, err := s.jsEngine.scriptCache.GetOrCompile(wrappedScript)
+	if err != nil {
+		log.Printf("[ERROR] TCP decorate behavior compilation error: %v", err)
+		return responseData
+	}
+
+	result, err := vm.RunProgram(program)
 	if err != nil {
 		log.Printf("[ERROR] TCP decorate behavior error: %v", err)
 		return responseData
