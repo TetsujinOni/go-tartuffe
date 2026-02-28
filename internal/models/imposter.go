@@ -1,14 +1,32 @@
 package models
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 )
+
+// Buffer pool for reducing allocations during JSON marshaling
+var bufPool = sync.Pool{
+	New: func() interface{} {
+		return new(bytes.Buffer)
+	},
+}
+
+func getBuf() *bytes.Buffer {
+	return bufPool.Get().(*bytes.Buffer)
+}
+
+func putBuf(buf *bytes.Buffer) {
+	buf.Reset()
+	bufPool.Put(buf)
+}
 
 // EndOfRequestResolver defines how to determine the end of a TCP request
 type EndOfRequestResolver struct {
@@ -121,78 +139,114 @@ func (imp *Imposter) ExtractCertMetadata() {
 
 // MarshalJSON implements custom JSON marshaling to ensure requests and stubs arrays are always present
 func (imp *Imposter) MarshalJSON() ([]byte, error) {
-	// Create an alias type to avoid infinite recursion
-	type ImposterAlias Imposter
+	// Use a more efficient approach that builds the JSON structure directly
+	// instead of marshal->unmarshal->modify->marshal
 
-	// Create a map to manually control serialization
-	data := make(map[string]interface{})
-
-	// Marshal the imposter using the alias type
-	aliasBytes, err := json.Marshal((*ImposterAlias)(imp))
-	if err != nil {
-		return nil, err
+	// Create a temporary struct that mirrors Imposter but allows us to control serialization
+	type ImposterJSON struct {
+		Port                   int                   `json:"port"`
+		Protocol               string                `json:"protocol"`
+		Name                   string                `json:"name,omitempty"`
+		Host                   string                `json:"host,omitempty"`
+		Mode                   string                `json:"mode,omitempty"`
+		RecordRequests         bool                  `json:"recordRequests"`
+		AllowCORS              bool                  `json:"allowCORS,omitempty"`
+		EndOfRequestResolver   *EndOfRequestResolver `json:"endOfRequestResolver,omitempty"`
+		Stubs                  []Stub                `json:"stubs"`
+		DefaultResponse        *Response             `json:"defaultResponse,omitempty"`
+		Requests               interface{}           `json:"requests,omitempty"`
+		Links                  *Links                `json:"_links,omitempty"`
+		ProtoFiles             []string              `json:"protoFiles,omitempty"`
+		ProtoDirectory         string                `json:"protoDirectory,omitempty"`
+		Services               []ServiceConfig       `json:"services,omitempty"`
+		EnableReflection       bool                  `json:"enableReflection,omitempty"`
+		Cert                   string                `json:"cert,omitempty"`
+		Key                    string                `json:"key,omitempty"`
+		MutualAuth             bool                  `json:"mutualAuth,omitempty"`
+		RejectUnauthorized     bool                  `json:"rejectUnauthorized,omitempty"`
+		Ca                     []string              `json:"ca,omitempty"`
+		Ciphers                string                `json:"ciphers,omitempty"`
+		CertificateFingerprint string                `json:"certificateFingerprint,omitempty"`
+		CommonName             string                `json:"commonName,omitempty"`
+		ValidFrom              string                `json:"validFrom,omitempty"`
+		ValidTo                string                `json:"validTo,omitempty"`
+		NumberOfRequests       *int                  `json:"numberOfRequests,omitempty"`
 	}
 
-	// Unmarshal into map
-	if err := json.Unmarshal(aliasBytes, &data); err != nil {
-		return nil, err
+	result := ImposterJSON{
+		Port:                   imp.Port,
+		Protocol:               imp.Protocol,
+		Name:                   imp.Name,
+		Host:                   imp.Host,
+		Mode:                   imp.Mode,
+		RecordRequests:         imp.RecordRequests,
+		AllowCORS:              imp.AllowCORS,
+		EndOfRequestResolver:   imp.EndOfRequestResolver,
+		DefaultResponse:        imp.DefaultResponse,
+		Links:                  imp.Links,
+		ProtoFiles:             imp.ProtoFiles,
+		ProtoDirectory:         imp.ProtoDirectory,
+		Services:               imp.Services,
+		EnableReflection:       imp.EnableReflection,
+		Cert:                   imp.Cert,
+		Key:                    imp.Key,
+		MutualAuth:             imp.MutualAuth,
+		RejectUnauthorized:     imp.RejectUnauthorized,
+		Ca:                     imp.Ca,
+		Ciphers:                imp.Ciphers,
+		CertificateFingerprint: imp.CertificateFingerprint,
+		CommonName:             imp.CommonName,
+		ValidFrom:              imp.ValidFrom,
+		ValidTo:                imp.ValidTo,
+		NumberOfRequests:       imp.NumberOfRequests,
 	}
 
-	// Ensure stubs array is always present (even if empty)
-	// This is required for mountebank compatibility - stubs should always appear
-	if _, ok := data["stubs"]; !ok {
-		data["stubs"] = []interface{}{}
+	// Ensure stubs is never nil (required for mountebank compatibility)
+	if imp.Stubs != nil {
+		result.Stubs = imp.Stubs
+	} else {
+		result.Stubs = []Stub{}
 	}
 
-	// Handle requests array for mountebank compatibility:
-	// Mountebank uses "requests" for all protocols, but we store them in separate fields.
-	// TCP uses TCPRequests, SMTP uses SMTPRequests, etc.
-	// We need to normalize to "requests" in JSON output.
-
-	// Remove protocol-specific request fields from output
-	delete(data, "tcpRequests")
-	delete(data, "smtpRequests")
-	delete(data, "grpcRequests")
-
-	// Determine which requests to use based on protocol
+	// Determine which requests field to use based on protocol
+	// Mountebank uses "requests" for all protocols
 	switch imp.Protocol {
 	case "tcp":
-		if imp.TCPRequests == nil {
-			delete(data, "requests")
-		} else if len(imp.TCPRequests) == 0 {
-			data["requests"] = []interface{}{}
-		} else {
-			data["requests"] = imp.TCPRequests
+		if imp.TCPRequests != nil {
+			if len(imp.TCPRequests) == 0 {
+				result.Requests = []interface{}{}
+			} else {
+				result.Requests = imp.TCPRequests
+			}
 		}
 	case "smtp":
-		if imp.SMTPRequests == nil {
-			delete(data, "requests")
-		} else if len(imp.SMTPRequests) == 0 {
-			data["requests"] = []interface{}{}
-		} else {
-			data["requests"] = imp.SMTPRequests
+		if imp.SMTPRequests != nil {
+			if len(imp.SMTPRequests) == 0 {
+				result.Requests = []interface{}{}
+			} else {
+				result.Requests = imp.SMTPRequests
+			}
 		}
 	case "grpc":
-		if imp.GRPCRequests == nil {
-			delete(data, "requests")
-		} else if len(imp.GRPCRequests) == 0 {
-			data["requests"] = []interface{}{}
-		} else {
-			data["requests"] = imp.GRPCRequests
+		if imp.GRPCRequests != nil {
+			if len(imp.GRPCRequests) == 0 {
+				result.Requests = []interface{}{}
+			} else {
+				result.Requests = imp.GRPCRequests
+			}
 		}
 	default:
 		// HTTP/HTTPS - use Requests field
-		if imp.Requests == nil {
-			delete(data, "requests")
-		} else if len(imp.Requests) == 0 {
-			if _, ok := data["requests"]; !ok {
-				data["requests"] = []interface{}{}
+		if imp.Requests != nil {
+			if len(imp.Requests) == 0 {
+				result.Requests = []interface{}{}
+			} else {
+				result.Requests = imp.Requests
 			}
 		}
 	}
 
-	// Marshal the modified map
-	return json.Marshal(data)
+	return json.Marshal(result)
 }
 
 // ToJSON serializes the imposter with options
