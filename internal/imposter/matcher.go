@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 )
@@ -41,6 +42,7 @@ type Matcher struct {
 	imposter      *models.Imposter
 	jsEngine      *JSEngine              // Shared JS engine
 	imposterState map[string]interface{} // Shared state across all requests
+	regexCache    sync.Map               // Cache for compiled regex patterns
 }
 
 // NewMatcher creates a new matcher for an imposter
@@ -97,6 +99,24 @@ func (m *Matcher) Match(req *models.Request) *MatchResult {
 	}
 
 	return &MatchResult{Response: &models.IsResponse{StatusCode: 200}, StubIndex: -1}
+}
+
+// getCompiledRegex returns a compiled regex from cache or compiles and caches it
+func (m *Matcher) getCompiledRegex(pattern string) (*regexp.Regexp, error) {
+	// Try to get from cache
+	if cached, ok := m.regexCache.Load(pattern); ok {
+		return cached.(*regexp.Regexp), nil
+	}
+
+	// Compile the regex
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	m.regexCache.Store(pattern, re)
+	return re, nil
 }
 
 // getMatchResult creates a MatchResult from a stub
@@ -318,7 +338,7 @@ func (m *Matcher) applyExcept(value string, except string, caseSensitive bool) s
 		pattern = "(?i)" + pattern
 	}
 
-	re, err := regexp.Compile(pattern)
+	re, err := m.getCompiledRegex(pattern)
 	if err != nil {
 		return value
 	}
@@ -1495,7 +1515,7 @@ func (m *Matcher) matchesPattern(actual, pattern interface{}, opts predicateOpti
 	// Apply except pattern to strip matching portions
 	actualStr = m.applyExcept(actualStr, opts.except, opts.caseSensitive)
 
-	re, err := regexp.Compile(patternStr)
+	re, err := m.getCompiledRegex(patternStr)
 	if err != nil {
 		return false
 	}
@@ -1554,7 +1574,7 @@ func (m *Matcher) jsonMatchesPattern(actual interface{}, patternMap map[string]i
 				patternStr = "(?i)" + patternStr
 			}
 
-			re, err := regexp.Compile(patternStr)
+			re, err := m.getCompiledRegex(patternStr)
 			if err != nil {
 				return false
 			}
