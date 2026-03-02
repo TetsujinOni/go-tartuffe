@@ -60,6 +60,7 @@ func runStart() {
 	// Other options
 	pidFile := flag.String("pidfile", "mb.pid", "where the pid is stored for the stop command")
 	debug := flag.Bool("debug", false, "include stub match information in imposter retrievals")
+	enablePprof := flag.Bool("pprof", false, "enable pprof debugging endpoints at /debug/pprof")
 	ipWhitelist := flag.String("ipWhitelist", "*", "pipe-delimited list of allowed IP addresses")
 	origin := flag.String("origin", "", "safe origin for CORS requests")
 	apiKey := flag.String("apikey", "", "API key for authentication")
@@ -106,6 +107,7 @@ func runStart() {
 		AllowInjection:      *allowInjection,
 		LocalOnly:           *localOnly,
 		Debug:               *debug,
+		EnablePprof:         *enablePprof,
 		IPWhitelist:         *ipWhitelist,
 		Origin:              *origin,
 		APIKey:              *apiKey,
