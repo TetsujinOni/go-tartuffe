@@ -160,6 +160,8 @@ func (r *InMemory) ClearRequests(port int) error {
 
 	imp.Requests = nil
 	imp.TCPRequests = nil
+	imp.SMTPRequests = nil
+	imp.GRPCRequests = nil
 	count := 0
 	imp.NumberOfRequests = &count
 	return nil
