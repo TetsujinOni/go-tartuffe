@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"github.com/TetsujinOni/go-tartuffe/internal/api/handlers"
@@ -33,6 +34,7 @@ type ServerConfig struct {
 	AllowInjection      bool
 	LocalOnly           bool
 	Debug               bool
+	EnablePprof         bool // Enable pprof debugging endpoints at /debug/pprof
 	IPWhitelist         string
 	Origin              string
 	APIKey              string
@@ -161,6 +163,44 @@ func NewServer(cfg ServerConfig) *Server {
 	// Documentation routes
 	router.GET("/docs", docsHandler.ServeDoc)
 	router.GET("/docs/{path:.*}", docsHandler.ServeDoc)
+
+	// pprof debugging routes (only if enabled)
+	if cfg.EnablePprof {
+		log.Println("pprof debugging endpoints enabled at /debug/pprof")
+		// Single wildcard route handles both /debug/pprof and /debug/pprof/*
+		// We check the actual URL path to determine if we need to redirect
+		router.GET("/debug/pprof/{path:.*}", func(w http.ResponseWriter, r *http.Request) {
+			// If accessing /debug/pprof without trailing slash, redirect to /debug/pprof/
+			// This ensures relative links in the HTML work correctly
+			if r.URL.Path == "/debug/pprof" {
+				http.Redirect(w, r, "/debug/pprof/", http.StatusMovedPermanently)
+				return
+			}
+
+			path := GetParam(r, "path")
+
+			// Create a request with the correct path for pprof handlers
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/debug/pprof/" + path
+			r2.RequestURI = r2.URL.RequestURI()
+
+			// Route to the appropriate handler
+			switch path {
+			case "":
+				pprof.Index(w, r2)
+			case "cmdline":
+				pprof.Cmdline(w, r2)
+			case "profile":
+				pprof.Profile(w, r2)
+			case "symbol":
+				pprof.Symbol(w, r2)
+			case "trace":
+				pprof.Trace(w, r2)
+			default:
+				pprof.Handler(path).ServeHTTP(w, r2)
+			}
+		})
+	}
 
 	// Apply middleware chain
 	// StaticFiles serves static assets from /public/
