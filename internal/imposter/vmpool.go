@@ -3,6 +3,7 @@ package imposter
 import (
 	"sync"
 
+	"github.com/TetsujinOni/go-tartuffe/internal/metrics"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja_nodejs/buffer"
 	"github.com/dop251/goja_nodejs/console"
@@ -32,6 +33,7 @@ func NewVMPool() *VMPool {
 
 // createVM creates a new configured Goja VM with all required modules enabled.
 func (vp *VMPool) createVM() interface{} {
+	metrics.RecordVMCreated()
 	vm := goja.New()
 	vp.registry.Enable(vm)
 	buffer.Enable(vm)
@@ -41,6 +43,7 @@ func (vp *VMPool) createVM() interface{} {
 
 // Acquire gets a VM from the pool. The caller must call Release when done.
 func (vp *VMPool) Acquire() *goja.Runtime {
+	metrics.RecordVMAcquire()
 	return vp.pool.Get().(*goja.Runtime)
 }
 
@@ -49,6 +52,7 @@ func (vp *VMPool) Acquire() *goja.Runtime {
 func (vp *VMPool) Release(vm *goja.Runtime) {
 	vp.resetVM(vm)
 	vp.pool.Put(vm)
+	metrics.RecordVMRelease()
 }
 
 // resetVM clears VM global state between uses.

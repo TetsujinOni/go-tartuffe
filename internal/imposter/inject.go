@@ -6,7 +6,9 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/TetsujinOni/go-tartuffe/internal/metrics"
 	"github.com/TetsujinOni/go-tartuffe/internal/models"
 	"github.com/dop251/goja"
 )
@@ -225,7 +227,9 @@ func (e *JSEngine) ExecuteResponse(script string, req *models.Request, imposterS
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("response", time.Since(jsStart).Seconds())
 	if err != nil {
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -313,7 +317,9 @@ func (e *JSEngine) ExecutePredicate(script string, req *models.Request, imposter
 		return false, formatJSError(err, script, formatRequestInfo(req))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("predicate", time.Since(jsStart).Seconds())
 	if err != nil {
 		return false, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -444,7 +450,9 @@ func (e *JSEngine) ExecutePredicateGenerator(script string, req *models.Request)
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("predicate_generator", time.Since(jsStart).Seconds())
 	if err != nil {
 		return nil, formatJSError(err, script, formatRequestInfo(req))
 	}
@@ -487,7 +495,9 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, is
 			return false, formatJSError(err, script, dataPreview)
 		}
 
+		jsStart := time.Now()
 		result, err := vm.RunProgram(program)
+		metrics.RecordJSExecution("end_of_request", time.Since(jsStart).Seconds())
 		if err != nil {
 			dataPreview := fmt.Sprintf("[binary data, %d bytes]", len(rawData))
 			return false, formatJSError(err, script, dataPreview)
@@ -517,7 +527,9 @@ func (e *JSEngine) ExecuteEndOfRequestResolver(script string, rawData []byte, is
 		return false, formatJSError(err, script, fmt.Sprintf("requestData: %q", dataPreview))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("end_of_request", time.Since(jsStart).Seconds())
 	if err != nil {
 		dataPreview := requestData
 		if len(dataPreview) > 50 {
@@ -581,7 +593,9 @@ func (e *JSEngine) ExecuteTCPPredicate(script string, requestData string) (bool,
 		return false, formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("tcp_predicate", time.Since(jsStart).Seconds())
 	if err != nil {
 		// Include preview of request data for debugging
 		dataPreview := requestData
@@ -651,7 +665,9 @@ func (e *JSEngine) ExecuteTCPResponse(script string, requestData string, state m
 		return "", formatJSError(err, script, fmt.Sprintf("TCP data: %q", dataPreview))
 	}
 
+	jsStart := time.Now()
 	result, err := vm.RunProgram(program)
+	metrics.RecordJSExecution("tcp_response", time.Since(jsStart).Seconds())
 	if err != nil {
 		// Include preview of request data for debugging
 		dataPreview := requestData

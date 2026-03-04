@@ -88,6 +88,31 @@ var (
 		},
 		[]string{"imposter"},
 	)
+
+	// JSVMCreatedTotal counts new Goja VM allocations by the pool
+	JSVMCreatedTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "mb_js_vm_created_total",
+		Help: "Total number of new JavaScript VMs created by the pool.",
+	})
+
+	// JSVMAcquiresTotal counts VM checkouts from the pool (one per JS execution)
+	JSVMAcquiresTotal = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "mb_js_vm_acquires_total",
+		Help: "Total number of JavaScript VM acquisitions from the pool.",
+	})
+
+	// JSVMsInUse tracks the number of VMs currently checked out
+	JSVMsInUse = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "mb_js_vms_in_use",
+		Help: "Current number of JavaScript VMs checked out from the pool.",
+	})
+
+	// JSExecutionDuration tracks JS script execution time, labelled by script type
+	JSExecutionDuration = promauto.NewHistogramVec(prometheus.HistogramOpts{
+		Name:    "mb_js_execution_duration_seconds",
+		Help:    "Duration of JavaScript script execution in seconds.",
+		Buckets: prometheus.DefBuckets,
+	}, []string{"script_type"})
 )
 
 // RecordRequest records a request to an imposter
@@ -136,6 +161,21 @@ func RecordNoMatch(endpoint, port string) {
 // SetStubsCount sets the number of stubs for an imposter
 func SetStubsCount(port string, count int) {
 	StubsTotal.WithLabelValues(port).Set(float64(count))
+}
+
+// RecordVMCreated records a new Goja VM allocation by the pool.
+func RecordVMCreated() { JSVMCreatedTotal.Inc() }
+
+// RecordVMAcquire records a VM checkout from the pool.
+func RecordVMAcquire() { JSVMAcquiresTotal.Inc(); JSVMsInUse.Inc() }
+
+// RecordVMRelease records a VM being returned to the pool.
+func RecordVMRelease() { JSVMsInUse.Dec() }
+
+// RecordJSExecution records the duration of a JavaScript script execution.
+// scriptType identifies the kind of script (e.g. "response", "predicate", "tcp_response").
+func RecordJSExecution(scriptType string, duration float64) {
+	JSExecutionDuration.WithLabelValues(scriptType).Observe(duration)
 }
 
 // RemoveImposterMetrics removes metrics for a deleted imposter
